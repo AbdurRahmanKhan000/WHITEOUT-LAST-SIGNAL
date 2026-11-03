@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { EventBus } from '../../src/core/EventBus';
 import { applyDamage } from '../../src/services/DamageService';
-import { raycastAabb, raycastScene } from '../../src/systems/player/raycast';
+import { raycastAabb, raycastScene } from '../../src/services/raycast';
 import { WeaponController } from '../../src/systems/player/WeaponController';
 
 describe('DamageService', () => {

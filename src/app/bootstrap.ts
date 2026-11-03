@@ -4,6 +4,7 @@ import { Logger } from '../core/Logger';
 import { ServiceContainer } from '../core/ServiceContainer';
 import { SaveRepository } from '../services/SaveRepository';
 import { AudioSystem } from '../systems/audio/AudioSystem';
+import { EnemySystem } from '../systems/enemy/EnemySystem';
 import { PlayerSystem } from '../systems/player/PlayerSystem';
 import { UISystem } from '../systems/ui/UISystem';
 
@@ -31,9 +32,20 @@ export async function bootstrap(canvas: HTMLCanvasElement): Promise<GameRuntime>
     services.register('save', new SaveRepository());
     services.register('stateMachine', stateMachine);
 
+    // Build 3: both gameplay systems are constructed once, registered in
+    // the container BEFORE any system initialises (so each can obtain the
+    // other through its typed service interface), then registered with
+    // the registry. PlayerSystem treats the enemy system as optional;
+    // EnemySystem treats the player snapshot the same way.
+    const playerSystem = new PlayerSystem();
+    const enemySystem = new EnemySystem();
+    services.register('playerSystem', playerSystem);
+    services.register('enemySystem', enemySystem);
+
     registry.register(new UISystem());
     registry.register(new AudioSystem());
-    registry.register(new PlayerSystem());
+    registry.register(playerSystem);
+    registry.register(enemySystem);
 
     const runtime = new GameRuntime(canvas, registry, clock, logger);
     try {

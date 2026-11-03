@@ -10,6 +10,14 @@ export class InputAdapter {
     private leftClickPending = false;
     private mouseDeltaX = 0;
     private mouseDeltaY = 0;
+    /**
+     * Build 3 fix: acquiring pointer lock can deliver one stale mousemove
+     * (the move that clicked the menu button, delivered after the lock
+     * was granted) whose delta is hundreds of pixels — applying it would
+     * spin the aim ~80 degrees in a single frame. The first move after
+     * lock acquisition is therefore discarded, never accumulated.
+     */
+    private suppressNextMove = false;
     private readonly cleanups: (() => void)[] = [];
     private readonly canvas: HTMLCanvasElement;
 
@@ -26,11 +34,28 @@ export class InputAdapter {
         };
         const mouseMove = (event: MouseEvent): void => {
             if (document.pointerLockElement === this.canvas) {
+                if (this.suppressNextMove) {
+                    this.suppressNextMove = false;
+                    return;
+                }
+                // Teleport guard: a single mousemove event jumping more
+                // than 250 px is not a real mouse flick — it is a
+                // synthetic teleport (headless browsers generate one when
+                // a click is dispatched while pointer-locked). Applying
+                // it would spin the aim ~80 degrees in one frame.
+                if (Math.abs(event.movementX) > 250 || Math.abs(event.movementY) > 250) {
+                    return;
+                }
                 this.mouseDeltaX += event.movementX;
                 this.mouseDeltaY += event.movementY;
             }
         };
         const lockChange = (): void => {
+            if (document.pointerLockElement === this.canvas) {
+                this.suppressNextMove = true;
+                this.mouseDeltaX = 0;
+                this.mouseDeltaY = 0;
+            }
             onLockChange();
         };
         const blur = (): void => {

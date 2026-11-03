@@ -48,7 +48,7 @@ The concept images are art direction only and are not shipped as assets.
 | 0     | Repository + foundation         | Done 2026-11-03 — gate fully green, local commit 53fea04, awaiting GitHub repo to push to |
 | 1     | Player vertical slice           | Done 2026-11-03 — gate fully green, see Build 1 report below                              |
 | 2     | Weapons + combat                | Done 2026-11-03 — gate fully green, see Build 2 report below                              |
-| 3     | Enemy AI                        | Not started                                                                               |
+| 3     | Enemy AI                        | Done 2026-11-03 — gate fully green, see Build 3 report below                              |
 | 4     | Effects + sound + UI            | Not started (UI shell only in Build 0)                                                    |
 | 5     | Mission framework + Levels 1-10 | Not started                                                                               |
 | 6     | Levels 11-20                    | Not started                                                                               |
@@ -162,18 +162,123 @@ until the current gate passes.
   integration": the Muse GitHub App has not been granted access to this
   repo. The owner must select this repo in the install card before a
   push can succeed. Builds 0-2 therefore remain local only for now.
-- Next build recommendation: Build 3 (enemy character rig, patrol
-  waypoints, perception, FSM, attack, reload, cover/reposition, damage
-  and death).
+- Next build recommendation: Build 4 (effects + sound + UI: full mixer and
+  positional audio, muzzle/impact polish, HUD work beyond the shell).
+
+## Build 3 report
+
+- Added: `src/data/enemies.ts` (grunt balance data, difficulty scale
+  table, arena waypoints / crates / spawns), `src/systems/enemy/` —
+  `Perception.ts` (distance, FOV, line of sight, sound), `NavigationGraph.ts`
+  (A\* over the authored waypoint graph), `EnemyStateMachine.ts` (explicit
+  FSM), `EnemyBrain.ts` (pure per-enemy runtime: state, timers, ammo,
+  path, steering), `EnemySystem.ts` (PlayCanvas figures, bus adapter,
+  HUD counts). `src/systems/player/raycast.ts` moved to
+  `src/services/raycast.ts` (same API) so perception and enemy fire share
+  one slab implementation; no system imports another system's internals.
+- Enemies: exactly 3 grunts in the test arena (health 100, patrol 1.6 m/s,
+  chase 3.2 m/s, perception 20 m / 100 degrees, attack range 12 m, fire
+  0.8 s, damage 8, magazine 12, reload 2.0 s, reaction 0.4 s, investigate
+  3 s, stun 0.4 s, sound range 20 m) at (-16, -16), (16, -16) and (0, -14),
+  starting in Patrol on the arena loop. Patrol facing is the arena
+  centre: a sentry that only looked where it walked would take a full
+  loop to notice a player near the centre.
+- Perception is strictly less-than range: the (0, -14) enemy sits exactly
+  20 m from the spawn (0, 6), so a stationary player is not detected —
+  this protects the existing arena e2e test. Detection also needs FOV
+  and a clear eye-to-chest line of sight (a low crate does not block a
+  ray passing over it). A player gunshot within 20 m sends patrolling
+  enemies to Investigate toward the shot origin.
+- FSM: Idle -> Patrol -> Investigate -> Alert -> Chase -> Attack ->
+  TakeCover -> Stunned -> Dead, with every transition through one
+  function. Reposition (SRS "cover/reposition") is realised as
+  Investigate moving over the graph toward the last known position, not
+  as a separate state — that is the behaviour the Build 3 design
+  specifies. TakeCover triggers once per life below 40% health, moving
+  to the nearest cover waypoint beside a crate, then resumes Attack.
+  A non-lethal hit stuns (0.4 s, then resumes the previous state);
+  death tips the figure over and emits `entity.died` (entityType
+  `enemy`). Enemy reload refills from an untracked supply (reserve
+  reported 0); magazine, cooldown and reload block firing exactly as
+  for the player.
+- Navigation: A\* over 12 authored waypoints (8 loop + 4 cover) with
+  edges validated against crate boxes expanded by 0.5 m; unreachable
+  goals return an empty path, never a loop. Path recomputation is
+  throttled to 0.5 s per enemy (NFR-14). Chase normally moves directly
+  at the player; see "Fixes found by testing" for the blocked case.
+- Wiring (SRS section 5): bootstrap constructs one PlayerSystem and one
+  EnemySystem and registers both in the ServiceContainer before any
+  system initialises. PlayerSystem obtains the enemy system via
+  `services.get` in a try/catch and uses only its `getEnemyTargets()`
+  interface for raycast targets; it never damages enemies locally —
+  enemy hits only emit `combat.hitConfirmed`, and EnemySystem applies
+  them through the brain (DamageService). EnemySystem reads the player
+  only through PlayerSystem's `getPlayerSnapshot()` (null when there is
+  no arena). Enemies spawn only while state is `playing` with a player
+  snapshot, are destroyed on transition to `mainMenu` (pause does not
+  destroy them), and reset on the new `arena.restarted` event. Enemy
+  shots emit `weapon.fired` (ownerId = enemy id, weaponId
+  `enemy-rifle`) and, on a geometric raycast hit, `combat.hitConfirmed`
+  with targetId `player`, which PlayerSystem turns into damage through
+  its existing private damage() — that is how enemies damage the player.
+- GREYBOX PLACEHOLDER, explicit: enemy figures are boxes and a sphere
+  with arms posed forward, like the Build 1 player figure. They are NOT
+  realistic rigged GLBs, and no SRS animation clips are met by Build 3.
+  There is no mission system yet — that is Build 5.
+- Fixes found by testing: (1) Graph dead-end at crate faces: an enemy
+  stopped against a crate has its centre (0.45 m radius) inside the
+  0.5 m expanded crate box, so a slab edge test rejected every path
+  from it. Start edges now use sampling from 0.25 m onward, which lets
+  an enemy leave the box it touches while still rejecting segments
+  that pass through a box. (2) Chase stall at the centre crate: an
+  enemy chasing across the crate face used to fall back to a 35-54 m
+  loop-graph detour while the player stood 15 m away. The brain now
+  sidesteps first — nearest expanded crate corner with a sampled-clear
+  segment — then resumes direct chase; graph repath is the fallback,
+  and standing still is the last resort, per the "stop when blocked"
+  rule. (3) E2E timing in this environment: the VM renders WebGL at
+  ~4 fps and the 0.05 s delta clamp caps game time near 0.2 s per wall
+  second, so 2.5 s of wall-clock W is only ~0.4 s of game time and the
+  first hit landed ~27 s after the walk. The spec now holds W for
+  10 s of wall clock (walking the player within attack range of the
+  crate face, so the first hit depends on the short chase, not the long
+  path) and allows 60 s for the health drop. Assertions are unchanged
+  (Chase/Attack text AND health below 100); only waits changed.
+  (4) Pointer-lock aim jump, found in independent verification after
+  the Build 3 commit: a click dispatched while pointer-locked
+  generates synthetic mousemove events jumping ~640 px in one event,
+  which the game applied as an ~80 degree aim spin, so the arena test's
+  rifle shot missed the board. Fixed in `InputAdapter.ts`: the first
+  move after lock acquisition is discarded, and any single mousemove
+  event over 250 px is ignored as a teleport artifact (a real flick
+  never arrives as one 640 px event). The arena test now also fires
+  with down/up instead of a click (in pointer lock only movement
+  matters, not position) and fires until a hit is logged, because the
+  rifle's random spread means one shot at the board's edge is not
+  guaranteed to hit — the assertion itself is unchanged.
+- Gate results 2026-11-03: typecheck pass, lint pass, fmt pass, Vitest
+  45/45 (20 existing + 25 enemy: perception, FSM, navigation, brain,
+  multi-brain 1/3/8), production build pass (dist JS 1,193 kB /
+  317 kB gzip), Playwright 3/3 (boot + arena unchanged + enemies, zero
+  console errors), enemies.spec passed 3 consecutive runs of the final
+  spec (plus two extra confirming runs), `vite preview` smoke check
+  HTTP 200 with the correct title. Local commit only — no GitHub push
+  was attempted in this build, per the task; the owner pushes manually.
+- Next build recommendation: Build 4 (effects + sound + UI).
 
 ## Traceability (Build 0)
 
-| Requirement                                   | Module                             | Evidence                                   |
-| --------------------------------------------- | ---------------------------------- | ------------------------------------------ |
-| FR-01 boot / error shell                      | `bootstrap.ts`, `UISystem.ts`      | Playwright boot test, error overlay        |
-| FR-02 main menu navigation                    | `UISystem.ts`, `index.html`        | Playwright boot test                       |
-| FR-22 settings (partial: shell + persistence) | `UISystem.ts`, `SaveRepository.ts` | Unit test, settings panel                  |
-| FR-20 local save, versioned                   | `SaveRepository.ts`                | Unit test                                  |
-| NFR-06 architecture / no circular imports     | `src/app/`, `src/core/`            | TypeScript strict check                    |
-| NFR-07 strict TS, lint, tests before merge    | CI workflow                        | GitHub Actions                             |
-| NFR-11 no secrets in bundle                   | —                                  | No credentials in repo; verify in CI build |
+| Requirement                                                                                           | Module                                            | Evidence                                                                                             |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| FR-01 boot / error shell                                                                              | `bootstrap.ts`, `UISystem.ts`                     | Playwright boot test, error overlay                                                                  |
+| FR-02 main menu navigation                                                                            | `UISystem.ts`, `index.html`                       | Playwright boot test                                                                                 |
+| FR-22 settings (partial: shell + persistence)                                                         | `UISystem.ts`, `SaveRepository.ts`                | Unit test, settings panel                                                                            |
+| FR-20 local save, versioned                                                                           | `SaveRepository.ts`                               | Unit test                                                                                            |
+| NFR-06 architecture / no circular imports                                                             | `src/app/`, `src/core/`                           | TypeScript strict check                                                                              |
+| NFR-07 strict TS, lint, tests before merge                                                            | CI workflow                                       | GitHub Actions                                                                                       |
+| NFR-11 no secrets in bundle                                                                           | —                                                 | No credentials in repo; verify in CI build                                                           |
+| FR-09 enemies detect via distance/FOV/LOS                                                             | `Perception.ts`, `EnemyBrain.ts`                  | Unit perception tests (range, FOV, blocked LOS, boundary), e2e enemies.spec                          |
+| FR-10 explicit AI states (patrol, investigate, alert, chase, attack, cover/reposition, stunned, dead) | `EnemyStateMachine.ts`, `EnemyBrain.ts`           | FSM unit tests, brain stun/cover tests, HUD state counts                                             |
+| FR-11 authored paths, avoid obstacles/loops                                                           | `NavigationGraph.ts`, `EnemyBrain.ts` (sidestep)  | A* unit tests (around crate, no repeats, unreachable empty, crate-face regression), e2e enemies.spec |
+| FR-12 fire, reload, damage, death on shared rules                                                     | `EnemyBrain.ts` (DamageService), `EnemySystem.ts` | Unit fire/reload/stun/lethal tests, e2e enemies.spec (health drop)                                   |
+| NFR-14 path recomputation throttled                                                                   | `EnemyBrain.ts` (0.5 s path timer)                | Code + unit brain tests                                                                              |

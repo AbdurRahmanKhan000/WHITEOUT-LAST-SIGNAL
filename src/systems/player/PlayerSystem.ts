@@ -6,7 +6,10 @@ import type { EventBus } from '../../core/EventBus';
 import type { GameContext, GameSystem } from '../../core/GameTypes';
 import type { WeaponId } from '../../data/weapons';
 import { applyDamage } from '../../services/DamageService';
+import { raycastScene } from '../../services/raycast';
+import type { Aabb3, Vec3 } from '../../services/raycast';
 import type { SaveRepository } from '../../services/SaveRepository';
+import type { EnemyTargetProvider } from '../enemy/EnemySystem';
 
 import { InputAdapter } from './InputAdapter';
 import {
@@ -19,8 +22,6 @@ import {
 } from './movement';
 import type { Obstacle } from './movement';
 import { PlayerAnimation } from './PlayerAnimation';
-import { raycastScene } from './raycast';
-import type { Aabb3, Vec3 } from './raycast';
 import { WeaponController } from './WeaponController';
 
 /**
@@ -101,6 +102,10 @@ export class PlayerSystem implements GameSystem {
     private hitmarkerTimer = 0;
     private previousReloadKey = false;
     private previousDigits = new Set<string>();
+    // Optional dependency, obtained from the container: the enemy system
+    // is the only source of enemy raycast targets, and it is never a hard
+    // crash if it is absent (the arena simply has no enemies).
+    private enemyTargets: EnemyTargetProvider | null = null;
 
     private arena: Entity | null = null;
     private playerRoot: Entity | null = null;
@@ -134,6 +139,11 @@ export class PlayerSystem implements GameSystem {
         this.input = new InputAdapter(canvas);
         this.input.attach(() => this.onLockChange());
         this.weapon = new WeaponController(context.eventBus);
+        try {
+            this.enemyTargets = context.services.get<EnemyTargetProvider>('enemySystem');
+        } catch {
+            this.enemyTargets = null;
+        }
         const log = (line: string): void => {
             const list = document.getElementById('hud-event-log');
             if (list === null) {
@@ -149,6 +159,14 @@ export class PlayerSystem implements GameSystem {
         this.cleanups.push(
             context.eventBus.on('weapon.fired', ({ weaponId }) => log(`Fired ${weaponId}`)),
             context.eventBus.on('combat.hitConfirmed', ({ targetId, damage }) => log(`Hit ${targetId} for ${damage}`)),
+            // Build 3: this is how enemies damage the player. Enemy shots
+            // emit combat.hitConfirmed with targetId 'player'; the damage
+            // itself still goes through this system's private damage().
+            context.eventBus.on('combat.hitConfirmed', ({ targetId, damage }) => {
+                if (targetId === 'player') {
+                    this.damage(damage);
+                }
+            }),
             context.eventBus.on('weapon.reloadStarted', ({ weaponId }) => log(`Reloading ${weaponId}…`)),
             context.eventBus.on('weapon.reloadCompleted', ({ weaponId, magazine, reserve }) =>
                 log(`Reloaded ${weaponId} ${magazine} / ${reserve}`)
@@ -256,6 +274,20 @@ export class PlayerSystem implements GameSystem {
         this.weapon = null;
     }
 
+    /** Player snapshot for the enemy system; null when there is no arena. */
+    getPlayerSnapshot(): {
+        readonly x: number;
+        readonly y: number;
+        readonly z: number;
+        readonly alive: boolean;
+    } | null {
+        if (this.playerRoot === null) {
+            return null;
+        }
+        const position = this.playerRoot.getPosition();
+        return { x: position.x, y: position.y, z: position.z, alive: this.health > 0 };
+    }
+
     private bindButtons(): void {
         const on = (id: string, handler: () => void): void => {
             const element = document.getElementById(id);
@@ -302,6 +334,7 @@ export class PlayerSystem implements GameSystem {
         const pause = document.getElementById('pause-overlay');
         if (pause !== null) pause.hidden = true;
         this.stateMachine.transitionTo('playing');
+        this.eventBus?.emit('arena.restarted', { source: 'player' });
         this.input.requestPointerLock();
         this.input.consumeLeftClick();
     }
@@ -447,6 +480,12 @@ export class PlayerSystem implements GameSystem {
             y: origin.y + aim.y * definition.range,
             z: origin.z + aim.z * definition.range
         };
+        // Build 3: raycast targets are the boards plus the alive enemies
+        // from the enemy system (obtained only through its typed service
+        // interface). Board hits are still resolved locally; enemy hits
+        // only emit combat.hitConfirmed — enemy health is owned by
+        // EnemySystem, never damaged here.
+        const enemyTargets = this.enemyTargets?.getEnemyTargets() ?? [];
         for (let pellet = 0; pellet < definition.pellets; pellet += 1) {
             const spreadX = (Math.random() * 2 - 1) * definition.spreadRadians;
             const spreadY = (Math.random() * 2 - 1) * definition.spreadRadians;
@@ -457,13 +496,27 @@ export class PlayerSystem implements GameSystem {
                 origin,
                 direction,
                 definition.range,
-                this.targets.filter((target) => target.alive).map((target) => ({ id: target.id, aabb: target.aabb })),
+                [
+                    ...this.targets
+                        .filter((target) => target.alive)
+                        .map((target) => ({ id: target.id, aabb: target.aabb })),
+                    ...enemyTargets
+                ],
                 blockers
             );
             endPoint = hit.point;
             if (hit.kind === 'target') {
                 const target = this.targets.find((candidate) => candidate.id === hit.id);
-                if (target !== undefined) {
+                if (enemyTargets.some((enemy) => enemy.id === hit.id)) {
+                    this.eventBus?.emit('combat.hitConfirmed', {
+                        sourceId: 'player',
+                        targetId: hit.id,
+                        hitZone: 'body',
+                        damage: definition.damagePerPellet,
+                        worldPosition: [hit.point.x, hit.point.y, hit.point.z]
+                    });
+                    this.showHitmarker();
+                } else if (target !== undefined) {
                     const outcome = applyDamage(target.health, definition.damagePerPellet);
                     target.health = outcome.health;
                     this.eventBus?.emit('combat.hitConfirmed', {

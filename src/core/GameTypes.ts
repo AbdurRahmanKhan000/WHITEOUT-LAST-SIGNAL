@@ -113,6 +113,9 @@ export interface GameEventMap {
         readonly magazine: number;
         readonly reserve: number;
     };
+    'arena.restarted': {
+        readonly source: string;
+    };
     'settings.audioChanged': AudioSettings;
     'app.stateChanged': {
         readonly previousState: GameState;
