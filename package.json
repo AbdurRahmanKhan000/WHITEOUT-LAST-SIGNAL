@@ -1,0 +1,36 @@
+{
+    "name": "whiteout-last-signal",
+    "version": "0.0.0",
+    "private": true,
+    "description": "WHITEOUT: Last Signal — single-player 3D action shooter for the web (PlayCanvas + TypeScript + Vite)",
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite --open",
+        "fmt": "prettier --check .",
+        "fmt:fix": "prettier --write .",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "preview": "vite preview",
+        "start": "vite preview --open",
+        "test": "vitest run",
+        "test:e2e": "playwright test",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "playcanvas": "^2.23.3"
+    },
+    "devDependencies": {
+        "@playcanvas/eslint-config": "3.0.0",
+        "@playcanvas/inspector": "^0.4.0",
+        "@playwright/test": "^1.55.0",
+        "eslint": "^9.39.5",
+        "prettier": "^3.9.10",
+        "typescript": "~6.0.3",
+        "vite": "^8.3.5",
+        "vitest": "^3.2.4"
+    },
+    "engines": {
+        "node": ">=22.23.2"
+    }
+}

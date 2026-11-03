@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>WHITEOUT: Last Signal</title>
+    </head>
+    <body>
+        <canvas id="application-canvas"></canvas>
+        <main id="main-menu" class="shell">
+            <section id="panel-home" class="panel-view">
+                <h1>WHITEOUT<br /><span>Last Signal</span></h1>
+                <p class="tagline">A 3D action shooter for the web. Single-player campaign, 30 levels.</p>
+                <p id="app-status" role="status">Booting…</p>
+                <div class="menu-buttons">
+                    <button id="btn-test-arena" type="button">Test Arena (Build 1)</button>
+                    <button id="btn-campaign" type="button">Campaign</button>
+                    <button id="btn-continue" type="button" disabled title="No saved progress yet">Continue</button>
+                    <button id="btn-settings" type="button">Settings</button>
+                    <button id="btn-controls" type="button">Controls</button>
+                    <button id="btn-credits" type="button">Credits</button>
+                </div>
+                <p class="build-note">Build 1 — test arena ready. Missions arrive in Build 5.</p>
+            </section>
+            <section id="panel-settings" class="panel-view" hidden>
+                <h2>Settings</h2>
+                <label
+                    >Master volume <input id="setting-master" type="range" min="0" max="1" step="0.05" value="0.8"
+                /></label>
+                <label
+                    >Music volume <input id="setting-music" type="range" min="0" max="1" step="0.05" value="0.6"
+                /></label>
+                <label
+                    >SFX volume <input id="setting-sfx" type="range" min="0" max="1" step="0.05" value="0.8"
+                /></label>
+                <label><input id="setting-muted" type="checkbox" /> Mute all</label>
+                <label
+                    >Mouse sensitivity
+                    <input id="setting-sensitivity" type="range" min="0.2" max="3" step="0.1" value="1"
+                /></label>
+                <label
+                    >Graphics quality
+                    <select id="setting-quality">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </label>
+                <button data-back-to-menu type="button">Back to menu</button>
+            </section>
+            <section id="panel-controls" class="panel-view" hidden>
+                <h2>Controls</h2>
+                <ul>
+                    <li>W / A / S / D — Move</li>
+                    <li>Mouse — Camera / aim</li>
+                    <li>Left mouse — Fire · Right mouse — Aim</li>
+                    <li>R — Reload · 1 / 2 / 3 — Switch weapon</li>
+                    <li>Shift — Sprint · Space — Jump · C — Crouch · Esc — Pause</li>
+                </ul>
+                <button data-back-to-menu type="button">Back to menu</button>
+            </section>
+            <section id="panel-credits" class="panel-view" hidden>
+                <h2>Credits</h2>
+                <p>
+                    WHITEOUT: Last Signal — original code and campaign design for this project. Production character,
+                    animation and audio assets are not yet licensed or included; see
+                    docs/asset-licenses/ASSET_LEDGER.md.
+                </p>
+                <button data-back-to-menu type="button">Back to menu</button>
+            </section>
+        </main>
+        <div id="arena-hud" hidden>
+            <div class="crosshair" aria-hidden="true"></div>
+            <div id="hud-hitmarker" aria-hidden="true"></div>
+            <p id="hud-debug-text" class="hud-debug"></p>
+            <ul id="hud-event-log" aria-label="Combat events"></ul>
+            <div class="hud-health">
+                <p id="hud-health-text">Health 100 / 100</p>
+                <div class="hud-health-track"><div id="hud-health-bar"></div></div>
+                <p id="hud-weapon-text">Assault Rifle · 30 / 120</p>
+                <button id="btn-debug-damage" type="button">Debug: take 10 damage</button>
+                <p class="hud-note">
+                    Left mouse fires · R reloads · 1/2/3 switch weapon. Greybox figure is a placeholder, not the final
+                    character. Press H for debug damage.
+                </p>
+            </div>
+        </div>
+        <div id="pause-overlay" class="overlay" hidden>
+            <h2>Paused</h2>
+            <p>Gameplay is frozen. Pointer lock was released.</p>
+            <button id="btn-resume" type="button">Resume</button>
+            <button id="btn-restart-arena" type="button">Restart arena</button>
+            <button id="btn-exit-arena" type="button">Back to menu</button>
+        </div>
+        <div id="loading-overlay" class="overlay" hidden>
+            <p>Loading…</p>
+            <button id="btn-loading-back" type="button">Back to menu</button>
+        </div>
+        <div id="error-overlay" class="overlay" hidden>
+            <h2>Something went wrong</h2>
+            <p id="error-message">The game could not start.</p>
+            <button id="btn-error-menu" type="button">Back to menu</button>
+        </div>
+        <script type="module" src="/src/main.ts"></script>
+    </body>
+</html>
