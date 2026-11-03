@@ -5,6 +5,7 @@ import { ServiceContainer } from '../core/ServiceContainer';
 import { SaveRepository } from '../services/SaveRepository';
 import { AudioSystem } from '../systems/audio/AudioSystem';
 import { EnemySystem } from '../systems/enemy/EnemySystem';
+import { GraphicsSystem } from '../systems/graphics/GraphicsSystem';
 import { PlayerSystem } from '../systems/player/PlayerSystem';
 import { UISystem } from '../systems/ui/UISystem';
 
@@ -46,6 +47,7 @@ export async function bootstrap(canvas: HTMLCanvasElement): Promise<GameRuntime>
     registry.register(new AudioSystem());
     registry.register(playerSystem);
     registry.register(enemySystem);
+    registry.register(new GraphicsSystem());
 
     const runtime = new GameRuntime(canvas, registry, clock, logger);
     try {

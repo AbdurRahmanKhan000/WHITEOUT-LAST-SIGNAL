@@ -20,7 +20,9 @@
                     <button id="btn-controls" type="button">Controls</button>
                     <button id="btn-credits" type="button">Credits</button>
                 </div>
-                <p class="build-note">Build 3 — enemies patrol the test arena. Missions arrive in Build 5.</p>
+                <p class="build-note">
+                    Build 4 — effects, positional sound and results shell. Missions arrive in Build 5.
+                </p>
             </section>
             <section id="panel-settings" class="panel-view" hidden>
                 <h2>Settings</h2>
@@ -72,7 +74,9 @@
         <div id="arena-hud" hidden>
             <div class="crosshair" aria-hidden="true"></div>
             <div id="hud-hitmarker" aria-hidden="true"></div>
+            <div id="hud-damage-flash" aria-hidden="true"></div>
             <p id="hud-debug-text" class="hud-debug"></p>
+            <p id="hud-objective-text" class="hud-objective">Eliminate all 3 enemies</p>
             <ul id="hud-event-log" aria-label="Combat events"></ul>
             <div class="hud-health">
                 <p id="hud-health-text">Health 100 / 100</p>
@@ -85,6 +89,12 @@
                     character. Press H for debug damage.
                 </p>
             </div>
+        </div>
+        <div id="results-overlay" class="overlay" hidden>
+            <h2>Arena cleared</h2>
+            <p id="results-text">No results yet.</p>
+            <button id="btn-results-restart" type="button">Restart arena</button>
+            <button id="btn-results-menu" type="button">Back to menu</button>
         </div>
         <div id="pause-overlay" class="overlay" hidden>
             <h2>Paused</h2>

@@ -135,6 +135,25 @@ button:disabled {
     text-shadow: 0 1px 3px #000;
 }
 
+.hud-objective {
+    position: fixed;
+    top: 36px;
+    left: 12px;
+    margin: 0;
+    color: #facc15;
+    font-weight: 600;
+    text-shadow: 0 1px 3px #000;
+}
+
+#hud-damage-flash {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, rgb(220 38 38 / 0.55) 100%);
+    opacity: 0;
+    transition: opacity 0.4s ease-out;
+}
+
 .hud-health {
     position: fixed;
     bottom: 16px;

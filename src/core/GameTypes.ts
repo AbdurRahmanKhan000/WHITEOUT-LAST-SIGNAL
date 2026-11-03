@@ -117,6 +117,17 @@ export interface GameEventMap {
         readonly source: string;
     };
     'settings.audioChanged': AudioSettings;
+    'settings.changed': Settings;
+    'enemy.detected': {
+        readonly enemyId: string;
+        readonly position: Vec3Tuple;
+    };
+    'arena.cleared': {
+        readonly kills: number;
+        readonly shots: number;
+        readonly hits: number;
+        readonly timeSeconds: number;
+    };
     'app.stateChanged': {
         readonly previousState: GameState;
         readonly newState: GameState;

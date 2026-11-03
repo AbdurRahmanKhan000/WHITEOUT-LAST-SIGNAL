@@ -266,6 +266,76 @@ until the current gate passes.
   was attempted in this build, per the task; the owner pushes manually.
 - Next build recommendation: Build 4 (effects + sound + UI).
 
+## Build 4 report
+
+- Scope (SRS section 11, Build 4): effects + sound + UI, in the test
+  arena. Missions still arrive in Build 5; nothing in this build
+  claims a mission, a realistic character, or licensed assets.
+- Graphics (`src/systems/graphics/`): a new `GraphicsSystem` owns a
+  pooled `EffectPool` (fixed set of small box/sphere entities, capped
+  per preset, so a firefight cannot accumulate unbounded temporary
+  entities). Every confirmed hit spawns a debris burst; every enemy
+  death spawns an explosion burst plus rising smoke. Muzzle flash,
+  tracer and the single impact sphere from Build 2 stay in
+  `PlayerSystem` — this system adds the pooled layer, it does not
+  move weapon feedback. Quality presets are real runtime settings
+  (`quality.ts`, pure and unit-tested): Low caps pixel ratio at 1,
+  disables shadow casting and caps effects at 12; Medium 1.5 / shadows
+  on / 24; High 2 / shadows on at 2048 / 48. Changing the settings
+  quality applies the preset live via a new `settings.changed`
+  event, and the same event lets sensitivity apply live in
+  `PlayerSystem` (previously it was only read at startup).
+- Sound (`src/systems/audio/`): the mixer follows the settings
+  sliders live (master / music / SFX / mute). Gunfire, hits and
+  explosions are positional (`positional.ts`, pure and unit-tested):
+  volume attenuates with distance from the camera and pan follows
+  world X offset. Pan is world-relative, not head-relative — the
+  listener's facing is not tracked, so a sound behind the player
+  pans the same as one in front at the same X offset; that limit is
+  documented in the code, not hidden. New sounds, all procedural Web
+  Audio, no licensed files shipped: enemy detection alert (two-tone),
+  hurt thud for player damage, explosion (low-passed noise), victory
+  arpeggio on arena clear, and a low ambient loop that starts when
+  play begins (after the arena button click, so autoplay rules are
+  satisfied) and suspends on pause/menu. The full positional model
+  (head-relative pan, occlusion, reverb) is Build 8 polish.
+- UI (`UISystem.ts`, `arenaStats.ts`): HUD objective ("Eliminate all
+  3 enemies — N remaining", updated on each enemy death), a red
+  damage flash held 2 s on player damage, and a results shell that
+  appears when all 3 arena enemies are dead (kills, shots, hits,
+  accuracy capped at 100 so shotgun pellets cannot report over 100%,
+  time), with Restart arena and Back to menu buttons wired to the
+  existing arena actions. The enemy total (3) is the test-arena
+  constant; Build 5 replaces it with mission data. Settings sliders
+  were already persisted in Build 0; Build 4 proves it in e2e
+  (master 0.5 and quality Low survive a reload).
+- Events added (`GameTypes.ts`): `settings.changed` (full Settings),
+  `enemy.detected` (emitted on the first transition to Alert per
+  enemy life, logged in the event log and sounded as an alert), and
+  `arena.cleared` (results summary, sounded as a victory arpeggio).
+- Honest limits: effects are pooled mesh bursts, not GPU particle
+  textures — no particle asset is shipped. Figures are still
+  greybox; this build improves feedback and UI, it does not make
+  boxes into the realistic soldier of the concept images. That
+  remains an asset decision, raised with the owner on 2026-11-03
+  after the live Build 3 deployment, who chose to continue Build 4
+  as planned.
+- Test environment note: the full e2e suite fails when run in
+  parallel on this VM (software WebGL, ~4 fps): arena timed out on a
+  mouse action, the damage flash faded before the slow HUD check,
+  and the enemies health drop exceeded 60 s. Each spec passes
+  individually, and the full suite passes 4/4 when run serially
+  (`--workers=1`, 1.8 m). The gate below is the serial run; parallel
+  failure here is a VM capacity limit, not a game regression.
+- Gate results 2026-11-03: typecheck pass, lint pass, fmt pass,
+  Vitest 54/54 (45 existing + 9 Build 4: quality profiles,
+  positional gain, arena stats), production build pass (dist JS
+  1,202 kB / 320 kB gzip), Playwright 4/4 serial (boot + arena +
+  build4 + enemies, zero console errors), `vite preview` smoke check
+  HTTP 200. Local commit only — no GitHub push was attempted in
+  this build; the owner pushes manually via ZIP, as before.
+- Next build recommendation: Build 5 (Levels 1–10).
+
 ## Traceability (Build 0)
 
 | Requirement                                                                                           | Module                                            | Evidence                                                                                             |

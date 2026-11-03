@@ -2,12 +2,16 @@ import type { EventBus } from '../../core/EventBus';
 import type { GameContext, GameSystem, Settings } from '../../core/GameTypes';
 import type { SaveRepository } from '../../services/SaveRepository';
 
+import { ArenaStats } from './arenaStats';
+
 /**
- * Build 0 menu / loading / error shell (SRS sections 2, 4.2, 7-E).
- * This is the shell only: campaign missions, HUD gameplay and results
- * arrive in Builds 4-5. Buttons that would start a mission therefore show
- * the loading shell honestly and return to the menu, instead of faking a
- * mission that does not exist yet.
+ * Build 0 menu / loading / error shell (SRS sections 2, 4.2, 7-E),
+ * extended in Build 4 with the arena HUD objective, damage flash and
+ * results shell (SRS section 7-E, Build 4 gate). Campaign missions
+ * still arrive in Build 5: the Campaign button shows the loading
+ * shell honestly instead of faking a mission, and the results shell
+ * covers the test arena only — its enemy total (3) is the test-arena
+ * constant, replaced by mission data in Build 5.
  */
 export class UISystem implements GameSystem {
     readonly name = 'ui';
@@ -15,12 +19,120 @@ export class UISystem implements GameSystem {
     private eventBus: EventBus | null = null;
     private save: SaveRepository | null = null;
     private readonly cleanups: (() => void)[] = [];
+    private readonly stats = new ArenaStats();
+    private resultsShown = false;
+    private flashTimer: number | null = null;
 
     initialize(context: GameContext): void {
         this.eventBus = context.eventBus;
         this.save = context.services.get<SaveRepository>('save');
         this.bind();
+        this.subscribeArena();
         void this.loadSettings();
+    }
+
+    private nowSeconds(): number {
+        return performance.now() / 1000;
+    }
+
+    private setObjective(remaining: number): void {
+        const element = document.getElementById('hud-objective-text');
+        if (element === null) {
+            return;
+        }
+        element.textContent = remaining > 0 ? `Eliminate all 3 enemies — ${remaining} remaining` : 'Arena cleared!';
+    }
+
+    private hideResults(): void {
+        const overlay = document.getElementById('results-overlay');
+        if (overlay !== null) {
+            overlay.hidden = true;
+        }
+    }
+
+    private resetArena(): void {
+        this.stats.reset(this.nowSeconds());
+        this.resultsShown = false;
+        this.hideResults();
+        this.setObjective(3);
+    }
+
+    private subscribeArena(): void {
+        if (this.eventBus === null) {
+            return;
+        }
+        this.cleanups.push(
+            this.eventBus.on('app.stateChanged', ({ previousState, newState }) => {
+                if (newState === 'playing' && previousState === 'loading') {
+                    this.resetArena();
+                }
+                if (newState === 'mainMenu') {
+                    this.hideResults();
+                }
+            }),
+            this.eventBus.on('arena.restarted', () => this.resetArena()),
+            this.eventBus.on('weapon.fired', ({ ownerId }) => {
+                if (ownerId === 'player') {
+                    this.stats.onShot();
+                }
+            }),
+            this.eventBus.on('combat.hitConfirmed', ({ sourceId }) => {
+                if (sourceId === 'player') {
+                    this.stats.onHit();
+                }
+            }),
+            this.eventBus.on('entity.died', ({ entityType }) => {
+                if (entityType !== 'enemy' || this.resultsShown) {
+                    return;
+                }
+                this.stats.onKill();
+                const summary = this.stats.summary(this.nowSeconds(), 3);
+                this.setObjective(3 - summary.kills);
+                if (!summary.cleared) {
+                    return;
+                }
+                this.resultsShown = true;
+                this.stats.stop(this.nowSeconds());
+                const finalSummary = this.stats.summary(this.nowSeconds(), 3);
+                const text = document.getElementById('results-text');
+                if (text !== null) {
+                    text.textContent =
+                        `Kills ${finalSummary.kills} · Shots ${finalSummary.shots} · ` +
+                        `Hits ${finalSummary.hits} · Accuracy ${finalSummary.accuracy}% · ` +
+                        `Time ${finalSummary.timeSeconds}s`;
+                }
+                const overlay = document.getElementById('results-overlay');
+                if (overlay !== null) {
+                    overlay.hidden = false;
+                }
+                this.eventBus?.emit('arena.cleared', {
+                    kills: finalSummary.kills,
+                    shots: finalSummary.shots,
+                    hits: finalSummary.hits,
+                    timeSeconds: finalSummary.timeSeconds
+                });
+            }),
+            this.eventBus.on('player.healthChanged', ({ delta }) => {
+                if (delta >= 0) {
+                    return;
+                }
+                const flash = document.getElementById('hud-damage-flash');
+                if (flash === null) {
+                    return;
+                }
+                flash.style.opacity = '0.55';
+                if (this.flashTimer !== null) {
+                    window.clearTimeout(this.flashTimer);
+                }
+                // Hold for 2 s so the flash is readable even when the
+                // HUD itself updates slowly (low frame rate stretches
+                // the time between damage and the next HUD refresh).
+                this.flashTimer = window.setTimeout(() => {
+                    flash.style.opacity = '0';
+                    this.flashTimer = null;
+                }, 2000);
+            })
+        );
     }
 
     private bind(): void {
@@ -167,6 +279,7 @@ export class UISystem implements GameSystem {
         };
         await this.save.updateSettings(settings);
         this.eventBus.emit('settings.audioChanged', settings.audio);
+        this.eventBus.emit('settings.changed', settings);
     }
 
     dispose(): void {

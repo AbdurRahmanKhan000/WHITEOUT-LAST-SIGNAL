@@ -159,6 +159,10 @@ export class PlayerSystem implements GameSystem {
         this.cleanups.push(
             context.eventBus.on('weapon.fired', ({ weaponId }) => log(`Fired ${weaponId}`)),
             context.eventBus.on('combat.hitConfirmed', ({ targetId, damage }) => log(`Hit ${targetId} for ${damage}`)),
+            context.eventBus.on('enemy.detected', ({ enemyId }) => log(`${enemyId} spotted you!`)),
+            context.eventBus.on('settings.changed', ({ sensitivity }) => {
+                this.sensitivity = Math.max(0.2, Math.min(3, sensitivity));
+            }),
             // Build 3: this is how enemies damage the player. Enemy shots
             // emit combat.hitConfirmed with targetId 'player'; the damage
             // itself still goes through this system's private damage().
@@ -301,7 +305,16 @@ export class PlayerSystem implements GameSystem {
         on('btn-resume', () => this.resume());
         on('btn-restart-arena', () => this.restartArena());
         on('btn-exit-arena', () => this.exitToMenu());
+        on('btn-results-restart', () => this.restartArena());
+        on('btn-results-menu', () => this.exitToMenu());
         on('btn-debug-damage', () => this.damage(10));
+    }
+
+    private hideResults(): void {
+        const overlay = document.getElementById('results-overlay');
+        if (overlay !== null) {
+            overlay.hidden = true;
+        }
     }
 
     private enterArena(): void {
@@ -311,6 +324,7 @@ export class PlayerSystem implements GameSystem {
         if (this.arena !== null) {
             return;
         }
+        this.hideResults();
         this.buildArena();
         this.weapon?.reset();
         const menu = document.getElementById('main-menu');
@@ -328,6 +342,7 @@ export class PlayerSystem implements GameSystem {
         if (this.playerRoot === null || this.stateMachine === null || this.input === null) {
             return;
         }
+        this.hideResults();
         this.respawn();
         this.resetTargets();
         this.weapon?.reset();
@@ -343,6 +358,7 @@ export class PlayerSystem implements GameSystem {
         if (this.stateMachine === null) {
             return;
         }
+        this.hideResults();
         this.destroyArena();
         const pause = document.getElementById('pause-overlay');
         if (pause !== null) pause.hidden = true;

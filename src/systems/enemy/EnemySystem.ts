@@ -168,7 +168,14 @@ export class EnemySystem implements GameSystem {
             if (brain.state === 'dead') {
                 continue;
             }
+            const previousState = brain.state;
             const action = brain.update({ player: snapshot.alive ? snapshot : null, blockers: this.blockers }, dt);
+            if (brain.state === 'alert' && previousState !== 'alert') {
+                this.eventBus?.emit('enemy.detected', {
+                    enemyId: brain.id,
+                    position: [brain.position.x, 0, brain.position.z]
+                });
+            }
             this.syncFigure(runtime);
             if (action.reloadStarted) {
                 this.eventBus?.emit('weapon.reloadStarted', { weaponId: 'enemy-rifle' });
