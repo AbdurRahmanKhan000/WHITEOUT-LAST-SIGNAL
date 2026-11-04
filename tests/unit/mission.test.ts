@@ -19,9 +19,11 @@ describe('level catalog', () => {
         const level = findLevel(1);
         expect(level).not.toBeNull();
         expect(level?.name).toBe('First Contact');
-        // Build 6: Level 11 is playable now; the unbuilt frontier is 21.
+        // Build 7: the whole campaign is playable; there is no unbuilt frontier left.
         expect(findLevel(11)?.name).toBe('Frozen Entry');
-        expect(findLevel(21)).toBeNull();
+        expect(findLevel(21)?.name).toBe('Dead District');
+        expect(findLevel(30)?.name).toBe('Last Signal');
+        expect(findLevel(30)?.nextLevelId).toBeNull();
     });
 
     it('fails clearly on a level with a missing objective label', () => {

@@ -12,7 +12,9 @@ const SEEDED_SAVE = (unlockedLevel: number): string =>
         }
     });
 
-test('build 6: Level 11 is unlockable after 10, 12 stays locked, 21 stays coming in Build 7', async ({ page }) => {
+test('build 6: Level 11 is unlockable after 10, 12 stays locked, 21 stays locked (playable since Build 7)', async ({
+    page
+}) => {
     const errors: string[] = [];
     page.on('console', (message) => {
         if (message.type() === 'error') {
@@ -37,7 +39,9 @@ test('build 6: Level 11 is unlockable after 10, 12 stays locked, 21 stays coming
     await expect(page.locator('.level-card', { hasText: '12. Whiteout Patrol' })).toContainText(
         'Locked — complete level 11 first'
     );
-    await expect(page.locator('.level-card', { hasText: '21. Dead District' })).toContainText('Coming in Build 7');
+    await expect(page.locator('.level-card', { hasText: '21. Dead District' })).toContainText(
+        'Locked — complete level 11 first'
+    );
     expect(errors).toEqual([]);
 });
 
@@ -59,7 +63,9 @@ test('build 6: Level 20 is unlockable at the frontier, 21 still locked', async (
     await expect(
         page.locator('.level-card', { hasText: '20. Underground Exit' }).getByRole('button', { name: 'Play' })
     ).toBeEnabled();
-    await expect(page.locator('.level-card', { hasText: '21. Dead District' })).toContainText('Coming in Build 7');
+    await expect(page.locator('.level-card', { hasText: '21. Dead District' })).toContainText(
+        'Locked — complete level 20 first'
+    );
     expect(errors).toEqual([]);
 });
 

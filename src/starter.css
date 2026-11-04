@@ -141,6 +141,15 @@ button:disabled {
     text-transform: uppercase;
 }
 
+.campaign-complete-banner {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #3f2d06;
+    color: #facc15;
+    font-weight: 700;
+}
+
 .campaign-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

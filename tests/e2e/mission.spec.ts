@@ -14,10 +14,13 @@ test('build 5: campaign list, briefing and mission HUD render cleanly', async ({
     await page.goto('/');
     await page.getByRole('button', { name: 'Campaign' }).click();
     await expect(page.locator('#campaign-list')).toBeVisible();
-    // All 30 levels are listed, grouped by stage; Level 21 is not playable yet (Build 7).
+    // All 30 levels are listed, grouped by stage; with a fresh save,
+    // Level 21 is locked behind the frontier, not "coming in" any more.
     await expect(page.locator('.campaign-stage').first()).toContainText('Training');
     await expect(page.locator('.level-card')).toHaveCount(30);
-    await expect(page.locator('.level-card', { hasText: '21. Dead District' })).toContainText('Coming in Build 7');
+    await expect(page.locator('.level-card', { hasText: '21. Dead District' })).toContainText(
+        'Locked — complete level 1 first'
+    );
     // Level 1 briefing shows objectives, environment and a Deploy button.
     await page.locator('.level-card', { hasText: '1. First Contact' }).getByRole('button', { name: 'Play' }).click();
     await expect(page.locator('#panel-briefing')).toBeVisible();

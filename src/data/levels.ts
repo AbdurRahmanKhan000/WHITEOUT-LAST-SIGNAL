@@ -1,14 +1,16 @@
 /**
  * Build 5 — data-driven level records (SRS sections 8, 12.1, Build 5 gate),
- * extended in Build 6 to Levels 11-20. One record per level; no 30
- * separate logic files. Levels 1-20 are fully playable; 21-30 exist in
- * the catalog only as locked summaries, so the campaign list is honest
- * about what is not built yet.
+ * extended in Build 6 to Levels 11-20 and in Build 7 to Levels 21-30.
+ * One record per level; no 30 separate logic files. All 30 levels are
+ * fully playable; there are no locked summaries left.
  *
- * Reused geometry: every Build 5 level runs in the test-arena geometry
+ * Reused geometry: every level runs in the test-arena geometry
  * (40x40 m, same crates/walls/waypoint graph). Levels differ in player
  * spawn, enemy spawn groups, objective zones, time limits, ammo reserve
  * and environment tint — not in maps. Greybox figures remain greybox.
+ * Level 22's rooftops and sniper position are a reach + eliminate
+ * objective pair in that geometry, not a rooftop map; Level 18's
+ * stranded operative was the same kind of honest stand-in.
  */
 
 import type { EnemyVariant } from './enemies';
@@ -125,6 +127,12 @@ const SNOW_TINT: EnvironmentTint = { clear: [0.06, 0.08, 0.11], lightIntensity: 
 const SNOW_DARK_TINT: EnvironmentTint = { clear: [0.01, 0.02, 0.03], lightIntensity: 0.7 };
 const FACILITY_TINT: EnvironmentTint = { clear: [0.02, 0.03, 0.05], lightIntensity: 0.85 };
 const TUNNEL_TINT: EnvironmentTint = { clear: [0.01, 0.02, 0.02], lightIntensity: 0.75 };
+const ROOFTOP_TINT: EnvironmentTint = { clear: [0.04, 0.05, 0.09], lightIntensity: 0.9 };
+const TERMINAL_TINT: EnvironmentTint = { clear: [0.04, 0.04, 0.06], lightIntensity: 0.9 };
+const COMMAND_TINT: EnvironmentTint = { clear: [0.03, 0.04, 0.08], lightIntensity: 0.9 };
+const TOWER_TINT: EnvironmentTint = { clear: [0.06, 0.05, 0.03], lightIntensity: 0.95 };
+const FORTRESS_TINT: EnvironmentTint = { clear: [0.05, 0.02, 0.02], lightIntensity: 0.85 };
+const CONTROL_TINT: EnvironmentTint = { clear: [0.01, 0.03, 0.06], lightIntensity: 0.8 };
 
 function checkpointsFor(objectives: readonly ObjectiveDefinition[]): readonly CheckpointDefinition[] {
     return [
@@ -1190,119 +1198,693 @@ export const LEVELS: readonly LevelRecord[] = [
         completionRules: { parSeconds: 480 },
         nextLevelId: 21,
         environmentTint: TUNNEL_TINT
-    }
-];
-
-const SUMMARIES_21_30: readonly {
-    readonly id: number;
-    readonly name: string;
-    readonly stage: StageName;
-    readonly environment: string;
-    readonly objective: string;
-    readonly comingIn: string;
-}[] = [
+    },
     {
         id: 21,
         name: 'Dead District',
-        stage: 'Final Campaign',
+        stage: 'Special Operations',
+        difficulty: 'Very Hard',
+        environmentId: 'abandoned-city',
         environment: 'Abandoned city',
-        objective: 'Clear a dense urban district with flanking enemies.',
-        comingIn: 'Build 7'
+        playerSpawn: { x: 0, z: 12 },
+        enemySpawnGroups: [
+            {
+                id: 'l21-first',
+                objectiveId: 'l21-first',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l21-e1', x: -14, z: -14 },
+                    { id: 'l21-e2', x: 0, z: -16 },
+                    { id: 'l21-e3', x: 14, z: -14 },
+                    { id: 'l21-e4', x: -8, z: -4 }
+                ]
+            },
+            {
+                id: 'l21-flank',
+                objectiveId: 'l21-flank',
+                variant: 'scout',
+                waveAfter: 'l21-first',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l21-e5', x: -16, z: 0 },
+                    { id: 'l21-e6', x: 16, z: 0 },
+                    { id: 'l21-e7', x: 0, z: -8 }
+                ]
+            },
+            {
+                id: 'l21-heavy',
+                objectiveId: 'l21-heavy',
+                variant: 'heavy',
+                waveAfter: 'l21-flank',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l21-e8', x: -12, z: -12 },
+                    { id: 'l21-e9', x: 12, z: -12 }
+                ]
+            }
+        ],
+        objectives: [
+            {
+                id: 'l21-first',
+                type: 'eliminate',
+                label: 'Clear the district centre (4 enemies)',
+                targetGroupId: 'l21-first',
+                count: 4
+            },
+            {
+                id: 'l21-flank',
+                type: 'eliminate',
+                label: 'Repulse the flanking scouts (3 enemies)',
+                targetGroupId: 'l21-flank',
+                count: 3
+            },
+            {
+                id: 'l21-heavy',
+                type: 'eliminate',
+                label: 'Break the heavy rearguard (2 enemies)',
+                targetGroupId: 'l21-heavy',
+                count: 2
+            }
+        ],
+        checkpointDefinitions: checkpointsFor([
+            { id: 'l21-first', type: 'eliminate', label: 'Clear the district centre (4 enemies)' },
+            { id: 'l21-flank', type: 'eliminate', label: 'Repulse the flanking scouts (3 enemies)' },
+            { id: 'l21-heavy', type: 'eliminate', label: 'Break the heavy rearguard (2 enemies)' }
+        ]),
+        musicCue: 'combat',
+        completionRules: { parSeconds: 420 },
+        nextLevelId: 22,
+        environmentTint: CITY_TINT
     },
     {
         id: 22,
         name: 'Rooftop Corridor',
-        stage: 'Final Campaign',
+        stage: 'Special Operations',
+        difficulty: 'Very Hard',
+        environmentId: 'urban-rooftops',
         environment: 'Urban rooftops',
-        objective: 'Advance across connected rooftops and disable a sniper position.',
-        comingIn: 'Build 7'
+        playerSpawn: { x: 0, z: 12 },
+        enemySpawnGroups: [
+            {
+                id: 'l22-patrol',
+                objectiveId: '',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l22-e1', x: -14, z: 0 },
+                    { id: 'l22-e2', x: 14, z: 0 },
+                    { id: 'l22-e3', x: 0, z: -8 }
+                ]
+            },
+            {
+                id: 'l22-sniper',
+                objectiveId: 'l22-sniper',
+                variant: 'scout',
+                patrolMode: 'stationary',
+                spawns: [
+                    { id: 'l22-e4', x: -14, z: -14 },
+                    { id: 'l22-e5', x: -10, z: -16 },
+                    { id: 'l22-e6', x: -16, z: -10 }
+                ]
+            }
+        ],
+        objectives: [
+            {
+                id: 'l22-advance',
+                type: 'reach',
+                label: 'Advance across the rooftops to the sniper position',
+                zone: { id: 'l22-zone', x: -16, z: -16, size: 4 }
+            },
+            {
+                id: 'l22-sniper',
+                type: 'eliminate',
+                label: 'Disable the sniper position (3 enemies)',
+                targetGroupId: 'l22-sniper',
+                count: 3
+            }
+        ],
+        checkpointDefinitions: checkpointsFor([
+            { id: 'l22-advance', type: 'reach', label: 'Advance across the rooftops to the sniper position' },
+            { id: 'l22-sniper', type: 'eliminate', label: 'Disable the sniper position (3 enemies)' }
+        ]),
+        musicCue: 'tense',
+        completionRules: { parSeconds: 360 },
+        nextLevelId: 23,
+        environmentTint: ROOFTOP_TINT
     },
     {
         id: 23,
         name: 'Transit Lockdown',
         stage: 'Final Campaign',
+        difficulty: 'Extreme',
+        environmentId: 'transit-terminal',
         environment: 'Transit terminal',
-        objective: 'Secure the terminal and defeat heavy resistance.',
-        comingIn: 'Build 7'
+        // Spawn inside the terminal zone (size 8, centred at z -12,
+        // so z -8 is inside), like Level 13: activation dwells from
+        // spawn instead of requiring a walk that resets the timer.
+        playerSpawn: { x: 0, z: -8 },
+        enemySpawnGroups: [
+            {
+                id: 'l23-guard',
+                objectiveId: '',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l23-e1', x: -14, z: -14 },
+                    { id: 'l23-e2', x: 14, z: -14 },
+                    { id: 'l23-e3', x: 0, z: -16 }
+                ]
+            },
+            {
+                id: 'l23-heavy',
+                objectiveId: '',
+                variant: 'heavy',
+                waveAfter: 'l23-guard',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l23-e4', x: -14, z: 0 },
+                    { id: 'l23-e5', x: 14, z: 0 },
+                    { id: 'l23-e6', x: 0, z: -8 }
+                ]
+            }
+        ],
+        objectives: [
+            {
+                id: 'l23-defend',
+                type: 'defend',
+                label: 'Secure the terminal (stand in the zone 3 s), then defend it for 60 s',
+                defendLabel: 'Defend the terminal for 60 s',
+                zone: { id: 'l23-zone', x: 0, z: -12, size: 8 },
+                dwellSeconds: 3,
+                surviveSeconds: 60
+            }
+        ],
+        checkpointDefinitions: checkpointsFor([
+            {
+                id: 'l23-defend',
+                type: 'defend',
+                label: 'Secure the terminal (stand in the zone 3 s), then defend it for 60 s'
+            }
+        ]),
+        musicCue: 'final',
+        completionRules: { parSeconds: 300 },
+        nextLevelId: 24,
+        environmentTint: TERMINAL_TINT
     },
     {
         id: 24,
         name: 'Armored Patrol',
         stage: 'Final Campaign',
+        difficulty: 'Extreme',
+        environmentId: 'command-district',
         environment: 'Command district',
-        objective: 'Defeat a heavy enemy unit with support troops.',
-        comingIn: 'Build 7'
+        playerSpawn: { x: 0, z: 12 },
+        enemySpawnGroups: [
+            {
+                id: 'l24-heavy',
+                objectiveId: 'l24-heavy',
+                variant: 'heavy',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l24-e1', x: -12, z: -12 },
+                    { id: 'l24-e2', x: 12, z: -12 }
+                ]
+            },
+            {
+                id: 'l24-support',
+                objectiveId: 'l24-support',
+                waveAfter: 'l24-heavy',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l24-e3', x: -14, z: 0 },
+                    { id: 'l24-e4', x: 14, z: 0 },
+                    { id: 'l24-e5', x: 0, z: -8 }
+                ]
+            }
+        ],
+        objectives: [
+            {
+                id: 'l24-heavy',
+                type: 'eliminate',
+                label: 'Defeat the heavy armored unit (2 heavies)',
+                targetGroupId: 'l24-heavy',
+                count: 2
+            },
+            {
+                id: 'l24-support',
+                type: 'eliminate',
+                label: 'Clear the support troops (3 enemies)',
+                targetGroupId: 'l24-support',
+                count: 3
+            }
+        ],
+        checkpointDefinitions: checkpointsFor([
+            { id: 'l24-heavy', type: 'eliminate', label: 'Defeat the heavy armored unit (2 heavies)' },
+            { id: 'l24-support', type: 'eliminate', label: 'Clear the support troops (3 enemies)' }
+        ]),
+        musicCue: 'combat',
+        completionRules: { parSeconds: 420 },
+        nextLevelId: 25,
+        environmentTint: COMMAND_TINT
     },
     {
         id: 25,
         name: 'Command District',
         stage: 'Final Campaign',
+        difficulty: 'Extreme',
+        environmentId: 'urban-command-zone',
         environment: 'Urban command zone',
-        objective: 'Complete two objectives while elite squads guard the area.',
-        comingIn: 'Build 7'
+        playerSpawn: { x: 0, z: 12 },
+        enemySpawnGroups: [
+            {
+                id: 'l25-guard',
+                objectiveId: '',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l25-e1', x: -14, z: -14 },
+                    { id: 'l25-e2', x: 14, z: -14 },
+                    { id: 'l25-e3', x: 0, z: -16 },
+                    { id: 'l25-e4', x: -8, z: -4 }
+                ]
+            },
+            {
+                id: 'l25-elite',
+                objectiveId: '',
+                variant: 'heavy',
+                waveAfter: 'l25-guard',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l25-e5', x: -14, z: 0 },
+                    { id: 'l25-e6', x: 14, z: 0 },
+                    { id: 'l25-e7', x: 0, z: -8 }
+                ]
+            }
+        ],
+        objectives: [
+            {
+                id: 'l25-first',
+                type: 'activate',
+                label: 'Secure command post A (stand in the zone 3 s)',
+                zone: { id: 'l25-zone-a', x: -12, z: -10, size: 4 },
+                dwellSeconds: 3
+            },
+            {
+                id: 'l25-second',
+                type: 'activate',
+                label: 'Secure command post B (stand in the zone 3 s)',
+                zone: { id: 'l25-zone-b', x: 12, z: -10, size: 4 },
+                dwellSeconds: 3
+            }
+        ],
+        checkpointDefinitions: checkpointsFor([
+            { id: 'l25-first', type: 'activate', label: 'Secure command post A (stand in the zone 3 s)' },
+            { id: 'l25-second', type: 'activate', label: 'Secure command post B (stand in the zone 3 s)' }
+        ]),
+        musicCue: 'final',
+        completionRules: { parSeconds: 420 },
+        nextLevelId: 26,
+        environmentTint: COMMAND_TINT
     },
     {
         id: 26,
         name: 'Signal Tower',
         stage: 'Final Campaign',
+        difficulty: 'Extreme',
+        environmentId: 'signal-tower',
         environment: 'Signal tower',
-        objective: 'Reach the tower and hold the location through a long wave.',
-        comingIn: 'Build 7'
+        playerSpawn: { x: 0, z: 12 },
+        enemySpawnGroups: [
+            {
+                id: 'l26-guard',
+                objectiveId: '',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l26-e1', x: -14, z: -14 },
+                    { id: 'l26-e2', x: 14, z: -14 },
+                    { id: 'l26-e3', x: 0, z: -16 }
+                ]
+            },
+            {
+                id: 'l26-wave',
+                objectiveId: '',
+                variant: 'scout',
+                waveAfter: 'l26-guard',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l26-e4', x: -14, z: 0 },
+                    { id: 'l26-e5', x: 14, z: 0 }
+                ]
+            },
+            {
+                id: 'l26-heavy',
+                objectiveId: '',
+                variant: 'heavy',
+                waveAfter: 'l26-wave',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l26-e6', x: -10, z: -10 },
+                    { id: 'l26-e7', x: 10, z: -10 }
+                ]
+            }
+        ],
+        objectives: [
+            {
+                id: 'l26-reach',
+                type: 'reach',
+                label: 'Reach the signal tower',
+                zone: { id: 'l26-zone', x: -14, z: -14, size: 4 }
+            },
+            {
+                id: 'l26-defend',
+                type: 'defend',
+                label: 'Hold the signal tower (stand in the zone 3 s), then hold it for 90 s',
+                defendLabel: 'Hold the signal tower for 90 s',
+                zone: { id: 'l26-zone-hold', x: -14, z: -14, size: 4 },
+                dwellSeconds: 3,
+                surviveSeconds: 90
+            }
+        ],
+        checkpointDefinitions: checkpointsFor([
+            { id: 'l26-reach', type: 'reach', label: 'Reach the signal tower' },
+            {
+                id: 'l26-defend',
+                type: 'defend',
+                label: 'Hold the signal tower (stand in the zone 3 s), then hold it for 90 s'
+            }
+        ]),
+        musicCue: 'tense',
+        completionRules: { parSeconds: 360 },
+        nextLevelId: 27,
+        environmentTint: TOWER_TINT
     },
     {
         id: 27,
         name: 'Breach Command',
         stage: 'Final Campaign',
+        difficulty: 'Extreme',
+        environmentId: 'command-complex',
         environment: 'Command complex',
-        objective: 'Breach the command complex and defeat its commander guard.',
-        comingIn: 'Build 7'
+        playerSpawn: { x: 0, z: 12 },
+        enemySpawnGroups: [
+            {
+                id: 'l27-outer',
+                objectiveId: 'l27-outer',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l27-e1', x: -14, z: -14 },
+                    { id: 'l27-e2', x: 0, z: -16 },
+                    { id: 'l27-e3', x: 14, z: -14 },
+                    { id: 'l27-e4', x: -8, z: -4 }
+                ]
+            },
+            {
+                id: 'l27-guard',
+                objectiveId: 'l27-guard',
+                variant: 'heavy',
+                waveAfter: 'l27-outer',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l27-e5', x: -12, z: -12 },
+                    { id: 'l27-e6', x: 12, z: -12 }
+                ]
+            },
+            {
+                id: 'l27-commander',
+                objectiveId: 'l27-commander',
+                variant: 'commander',
+                waveAfter: 'l27-guard',
+                patrolMode: 'loop',
+                spawns: [{ id: 'l27-e7', x: 0, z: -12 }]
+            }
+        ],
+        objectives: [
+            {
+                id: 'l27-outer',
+                type: 'eliminate',
+                label: 'Breach the outer guard (4 enemies)',
+                targetGroupId: 'l27-outer',
+                count: 4
+            },
+            {
+                id: 'l27-guard',
+                type: 'eliminate',
+                label: 'Break the commander guard (2 heavies)',
+                targetGroupId: 'l27-guard',
+                count: 2
+            },
+            {
+                id: 'l27-commander',
+                type: 'eliminate',
+                label: 'Defeat the commander (1 enemy)',
+                targetGroupId: 'l27-commander',
+                count: 1
+            }
+        ],
+        checkpointDefinitions: checkpointsFor([
+            { id: 'l27-outer', type: 'eliminate', label: 'Breach the outer guard (4 enemies)' },
+            { id: 'l27-guard', type: 'eliminate', label: 'Break the commander guard (2 heavies)' },
+            { id: 'l27-commander', type: 'eliminate', label: 'Defeat the commander (1 enemy)' }
+        ]),
+        musicCue: 'final',
+        completionRules: { parSeconds: 480 },
+        nextLevelId: 28,
+        environmentTint: COMMAND_TINT
     },
     {
         id: 28,
         name: 'Final Approach',
         stage: 'Final Showdown',
+        difficulty: 'Elite',
+        environmentId: 'final-fortress',
         environment: 'Final fortress',
-        objective: 'Break through outer defenses and reach the inner gate.',
-        comingIn: 'Build 7'
+        playerSpawn: { x: 0, z: 12 },
+        enemySpawnGroups: [
+            {
+                id: 'l28-outer',
+                objectiveId: 'l28-outer',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l28-e1', x: -14, z: -14 },
+                    { id: 'l28-e2', x: 0, z: -16 },
+                    { id: 'l28-e3', x: 14, z: -14 },
+                    { id: 'l28-e4', x: -8, z: -4 }
+                ]
+            },
+            {
+                id: 'l28-inner',
+                objectiveId: 'l28-inner',
+                variant: 'heavy',
+                waveAfter: 'l28-outer',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l28-e5', x: -12, z: -12 },
+                    { id: 'l28-e6', x: 0, z: -14 },
+                    { id: 'l28-e7', x: 12, z: -12 }
+                ]
+            }
+        ],
+        objectives: [
+            {
+                id: 'l28-outer',
+                type: 'eliminate',
+                label: 'Break through the outer defenses (4 enemies)',
+                targetGroupId: 'l28-outer',
+                count: 4
+            },
+            {
+                id: 'l28-inner',
+                type: 'eliminate',
+                label: 'Clear the inner defense (3 heavies)',
+                targetGroupId: 'l28-inner',
+                count: 3
+            },
+            {
+                id: 'l28-gate',
+                type: 'reach',
+                label: 'Reach the inner gate',
+                zone: { id: 'l28-zone', x: 14, z: 14, size: 4 }
+            }
+        ],
+        checkpointDefinitions: checkpointsFor([
+            { id: 'l28-outer', type: 'eliminate', label: 'Break through the outer defenses (4 enemies)' },
+            { id: 'l28-inner', type: 'eliminate', label: 'Clear the inner defense (3 heavies)' },
+            { id: 'l28-gate', type: 'reach', label: 'Reach the inner gate' }
+        ]),
+        musicCue: 'final',
+        completionRules: { parSeconds: 480 },
+        nextLevelId: 29,
+        environmentTint: FORTRESS_TINT
     },
     {
         id: 29,
         name: 'Final Siege',
         stage: 'Final Showdown',
+        difficulty: 'Elite',
+        environmentId: 'final-fortress',
         environment: 'Final fortress',
-        objective: 'Survive successive waves and defeat the heavy commander.',
-        comingIn: 'Build 7'
+        playerSpawn: { x: 0, z: -8 },
+        enemySpawnGroups: [
+            {
+                id: 'l29-guard',
+                objectiveId: 'l29-guard',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l29-e1', x: -14, z: -14 },
+                    { id: 'l29-e2', x: 14, z: -14 },
+                    { id: 'l29-e3', x: 0, z: -16 },
+                    { id: 'l29-e4', x: -8, z: -4 }
+                ]
+            },
+            {
+                id: 'l29-heavy',
+                objectiveId: '',
+                variant: 'heavy',
+                waveAfter: 'l29-guard',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l29-e5', x: -14, z: 0 },
+                    { id: 'l29-e6', x: 14, z: 0 },
+                    { id: 'l29-e7', x: 0, z: -8 }
+                ]
+            },
+            {
+                id: 'l29-commander',
+                objectiveId: 'l29-commander',
+                variant: 'commander',
+                waveAfter: 'l29-heavy',
+                patrolMode: 'loop',
+                spawns: [{ id: 'l29-e8', x: 0, z: -12 }]
+            }
+        ],
+        objectives: [
+            {
+                id: 'l29-guard',
+                type: 'eliminate',
+                label: 'Survive the first siege wave (4 enemies)',
+                targetGroupId: 'l29-guard',
+                count: 4
+            },
+            {
+                id: 'l29-commander',
+                type: 'eliminate',
+                label: 'Defeat the heavy commander (1 enemy)',
+                targetGroupId: 'l29-commander',
+                count: 1
+            },
+            {
+                id: 'l29-hold',
+                type: 'defend',
+                label: 'Hold the fortress (stand in the zone 3 s), then hold it for 90 s',
+                defendLabel: 'Hold the fortress for 90 s',
+                zone: { id: 'l29-zone', x: 0, z: -12, size: 8 },
+                dwellSeconds: 3,
+                surviveSeconds: 90
+            }
+        ],
+        checkpointDefinitions: checkpointsFor([
+            { id: 'l29-guard', type: 'eliminate', label: 'Survive the first siege wave (4 enemies)' },
+            { id: 'l29-commander', type: 'eliminate', label: 'Defeat the heavy commander (1 enemy)' },
+            {
+                id: 'l29-hold',
+                type: 'defend',
+                label: 'Hold the fortress (stand in the zone 3 s), then hold it for 90 s'
+            }
+        ]),
+        musicCue: 'final',
+        completionRules: { parSeconds: 540 },
+        nextLevelId: 30,
+        environmentTint: FORTRESS_TINT
     },
     {
         id: 30,
         name: 'Last Signal',
         stage: 'Final Showdown',
+        difficulty: 'Elite',
+        environmentId: 'final-control-room',
         environment: 'Final control room',
-        objective: 'Complete the final objective and escape after the last encounter.',
-        comingIn: 'Build 7'
+        playerSpawn: { x: 0, z: 12 },
+        enemySpawnGroups: [
+            {
+                id: 'l30-outer',
+                objectiveId: 'l30-outer',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l30-e1', x: -14, z: -14 },
+                    { id: 'l30-e2', x: 0, z: -16 },
+                    { id: 'l30-e3', x: 14, z: -14 },
+                    { id: 'l30-e4', x: -8, z: -4 }
+                ]
+            },
+            {
+                id: 'l30-support',
+                objectiveId: '',
+                variant: 'heavy',
+                waveAfter: 'l30-outer',
+                patrolMode: 'loop',
+                spawns: [
+                    { id: 'l30-e5', x: -12, z: -12 },
+                    { id: 'l30-e6', x: 12, z: -12 }
+                ]
+            },
+            {
+                id: 'l30-commander',
+                objectiveId: 'l30-commander',
+                variant: 'commander',
+                waveAfter: 'l30-support',
+                patrolMode: 'loop',
+                spawns: [{ id: 'l30-e7', x: 0, z: -12 }]
+            }
+        ],
+        objectives: [
+            {
+                id: 'l30-outer',
+                type: 'eliminate',
+                label: 'Clear the final guard (4 enemies)',
+                targetGroupId: 'l30-outer',
+                count: 4
+            },
+            {
+                id: 'l30-commander',
+                type: 'eliminate',
+                label: 'Defeat the final commander (1 enemy)',
+                targetGroupId: 'l30-commander',
+                count: 1
+            },
+            {
+                id: 'l30-console',
+                type: 'activate',
+                label: 'Activate the final console (stand in the zone 3 s)',
+                zone: { id: 'l30-zone-console', x: 0, z: -12, size: 4 },
+                dwellSeconds: 3
+            },
+            {
+                id: 'l30-escape',
+                type: 'reach',
+                label: 'Escape after the last encounter',
+                zone: { id: 'l30-zone-escape', x: 14, z: 14, size: 4 }
+            }
+        ],
+        checkpointDefinitions: checkpointsFor([
+            { id: 'l30-outer', type: 'eliminate', label: 'Clear the final guard (4 enemies)' },
+            { id: 'l30-commander', type: 'eliminate', label: 'Defeat the final commander (1 enemy)' },
+            { id: 'l30-console', type: 'activate', label: 'Activate the final console (stand in the zone 3 s)' },
+            { id: 'l30-escape', type: 'reach', label: 'Escape after the last encounter' }
+        ]),
+        musicCue: 'final',
+        completionRules: { parSeconds: 600 },
+        nextLevelId: null,
+        environmentTint: CONTROL_TINT
     }
 ];
 
-export const CATALOG: readonly CatalogEntry[] = [
-    ...LEVELS.map((level): CatalogEntry => ({
-        id: level.id,
-        name: level.name,
-        stage: level.stage,
-        environment: level.environment,
-        objectiveSummary: level.objectives.map((objective) => objective.label).join(' · '),
-        playable: true,
-        difficulty: level.difficulty
-    })),
-    ...SUMMARIES_21_30.map((summary): CatalogEntry => ({
-        id: summary.id,
-        name: summary.name,
-        stage: summary.stage,
-        environment: summary.environment,
-        objectiveSummary: summary.objective,
-        playable: false,
-        comingIn: summary.comingIn
-    }))
-];
+/** Build 7: every catalog entry is now a playable level record — no locked summaries remain. */
+export const CATALOG: readonly CatalogEntry[] = LEVELS.map((level): CatalogEntry => ({
+    id: level.id,
+    name: level.name,
+    stage: level.stage,
+    environment: level.environment,
+    objectiveSummary: level.objectives.map((objective) => objective.label).join(' · '),
+    playable: true,
+    difficulty: level.difficulty
+}));
 
 export function findLevel(id: number): LevelRecord | null {
     return LEVELS.find((level) => level.id === id) ?? null;
@@ -1336,7 +1918,8 @@ export function validateLevel(level: LevelRecord): void {
             group.variant !== undefined &&
             group.variant !== 'grunt' &&
             group.variant !== 'heavy' &&
-            group.variant !== 'scout'
+            group.variant !== 'scout' &&
+            group.variant !== 'commander'
         ) {
             throw new Error(`Level ${level.id}: group ${group.id} has unknown variant ${group.variant}`);
         }

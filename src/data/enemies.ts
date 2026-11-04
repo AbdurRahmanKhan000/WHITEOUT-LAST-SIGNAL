@@ -112,11 +112,42 @@ export const SCOUT: EnemyDefinition = {
     soundRange: 22
 };
 
-export type EnemyVariant = 'grunt' | 'heavy' | 'scout';
+/**
+ * Build 7 — commander variant (SRS Build 7, boss-like encounters).
+ * The toughest unit in the game: four times grunt health, the hardest
+ * hits, the slowest chase and the longest reload, with the briefest
+ * stun, so it reads as a commander to be worn down with support
+ * troops around it rather than rushed. Used for the Level 27
+ * commander guard, the Level 29 heavy commander and the Level 30
+ * final encounter. Data only, like heavy and scout: the brain,
+ * perception and combat rules are unchanged.
+ */
+export const COMMANDER: EnemyDefinition = {
+    id: 'commander',
+    name: 'Commander',
+    health: 400,
+    patrolSpeed: 1.0,
+    chaseSpeed: 2.0,
+    perceptionRange: 18,
+    fovDegrees: 100,
+    attackRange: 14,
+    fireIntervalSeconds: 1.2,
+    damage: 16,
+    magazineSize: 10,
+    reloadSeconds: 3.0,
+    reactionSeconds: 0.5,
+    investigateSeconds: 3,
+    stunSeconds: 0.2,
+    soundRange: 20
+};
+
+export type EnemyVariant = 'grunt' | 'heavy' | 'scout' | 'commander';
 
 /** Base definition for a variant; 'grunt' is the Build 3 default. */
 export function definitionForVariant(variant: EnemyVariant): EnemyDefinition {
     switch (variant) {
+        case 'commander':
+            return COMMANDER;
         case 'heavy':
             return HEAVY;
         case 'scout':
@@ -127,9 +158,11 @@ export function definitionForVariant(variant: EnemyVariant): EnemyDefinition {
     }
 }
 
-/** Figure scale for a variant: heavies read bigger, scouts smaller. */
+/** Figure scale for a variant: commanders read biggest, then heavies, then grunts, then scouts. */
 export function figureScaleForVariant(variant: EnemyVariant): number {
     switch (variant) {
+        case 'commander':
+            return 1.5;
         case 'heavy':
             return 1.25;
         case 'scout':

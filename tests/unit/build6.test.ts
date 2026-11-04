@@ -94,15 +94,11 @@ describe('build 6 unlock chain 10 to 20', () => {
         expect(nextUnlockedLevel(11, 11, false)).toBe(11);
     });
 
-    it('the catalog still holds exactly 30 levels, 1-20 playable, 21-30 locked', () => {
+    it('the catalog still holds exactly 30 levels, all playable since Build 7', () => {
         expect(CATALOG.length).toBe(30);
         for (const entry of CATALOG) {
-            if (entry.id <= 20) {
-                expect(entry.playable).toBe(true);
-            } else {
-                expect(entry.playable).toBe(false);
-                expect(entry.comingIn).toBe('Build 7');
-            }
+            expect(entry.playable).toBe(true);
+            expect(entry.comingIn).toBeUndefined();
         }
     });
 
@@ -116,7 +112,8 @@ describe('build 6 unlock chain 10 to 20', () => {
         expect(findLevel(15)?.name).toBe('Last Outpost');
         expect(findLevel(20)?.name).toBe('Underground Exit');
         expect(findLevel(12)?.perceptionMultiplier).toBe(0.6);
-        expect(findLevel(21)).toBeNull();
+        // Build 7: Level 21 is playable now, not the frontier.
+        expect(findLevel(21)?.name).toBe('Dead District');
     });
 
     it('validation rejects an unknown variant and a bad perception multiplier', () => {

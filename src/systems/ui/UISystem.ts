@@ -195,13 +195,22 @@ export class UISystem implements GameSystem {
             this.eventBus.on('mission.completed', (result) => {
                 this.currentMissionNext = result.nextLevelId;
                 const level = findLevel(result.levelId);
+                // Build 7 ending: Level 30 is the last mission, so its
+                // victory screen is also the campaign ending. No
+                // cinematic cutscene is claimed — the ending is this
+                // results screen plus the campaign-complete message,
+                // and the campaign list shows the same state on reload.
+                const campaignComplete = result.levelId === 30;
                 const text = document.getElementById('mission-result-text');
                 if (text !== null) {
                     text.textContent =
                         `${level?.name ?? `Level ${result.levelId}`} complete · ` +
                         `Kills ${result.kills} · Accuracy ${result.accuracy}% · ` +
                         `Time ${result.timeSeconds}s · Damage ${result.damageReceived} · ` +
-                        `Score ${result.score} · Rank ${result.rank}`;
+                        `Score ${result.score} · Rank ${result.rank}` +
+                        (campaignComplete
+                            ? ' · Campaign complete! You finished all 30 missions of WHITEOUT: Last Signal.'
+                            : '');
                 }
                 const nextButton = document.getElementById('btn-mission-next') as HTMLButtonElement | null;
                 if (nextButton !== null) {
@@ -209,7 +218,7 @@ export class UISystem implements GameSystem {
                     nextButton.disabled = !hasNext;
                     nextButton.textContent = hasNext
                         ? `Next mission: Level ${result.nextLevelId}`
-                        : 'More missions arrive in Build 7';
+                        : 'Campaign complete — no next mission';
                 }
                 const overlay = document.getElementById('mission-victory-overlay');
                 if (overlay !== null) {
@@ -237,6 +246,15 @@ export class UISystem implements GameSystem {
             return;
         }
         list.innerHTML = '';
+        // Build 7: frontier 31 means Level 30 is complete, so the
+        // campaign is complete. The banner is the menu-side ending
+        // state; it survives a reload because the frontier is saved.
+        if (save.unlockedLevel >= 31) {
+            const banner = document.createElement('p');
+            banner.className = 'campaign-complete-banner';
+            banner.textContent = 'Campaign complete — all 30 missions finished. Replay any mission from its card.';
+            list.appendChild(banner);
+        }
         for (const { stage, entries } of catalogByStage()) {
             const heading = document.createElement('h3');
             heading.className = 'campaign-stage';
@@ -467,9 +485,18 @@ export class UISystem implements GameSystem {
         this.renderCampaign(data);
         const continueButton = document.getElementById('btn-continue') as HTMLButtonElement | null;
         if (continueButton !== null) {
-            continueButton.disabled = data.unlockedLevel <= 1;
+            // Frontier 31 is not a mission: there is nothing to
+            // continue to, so Continue is disabled with the ending
+            // title instead of pointing at a nonexistent mission 31.
+            // Completed missions are still replayable from the
+            // campaign list.
+            continueButton.disabled = data.unlockedLevel <= 1 || data.unlockedLevel >= 31;
             continueButton.title =
-                data.unlockedLevel <= 1 ? 'No saved progress yet' : `Continue from mission ${data.unlockedLevel}`;
+                data.unlockedLevel <= 1
+                    ? 'No saved progress yet'
+                    : data.unlockedLevel >= 31
+                      ? 'Campaign complete — all 30 missions finished'
+                      : `Continue from mission ${data.unlockedLevel}`;
         }
     }
 

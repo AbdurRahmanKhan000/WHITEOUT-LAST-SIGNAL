@@ -522,6 +522,94 @@ until the current gate passes.
   this build.
 - Next build recommendation: Build 7 (Levels 21-30).
 
+## Build 7 report
+
+- Scope (SRS section 11, Build 7): Levels 21-30 playable in
+  sequence after Level 20; all 30 missions unlock and complete;
+  end-to-end campaign state and save integrity pass.
+- Levels (src/data/levels.ts, same validated schema as Builds
+  5-6; the locked-summary table for 21-30 is deleted, so the
+  catalog is now 30 playable records): 21 Dead District (three
+  sequential groups: centre, flanking scouts, heavy rearguard),
+  22 Rooftop Corridor (reach the sniper position, then eliminate
+  it), 23 Transit Lockdown (secure the terminal, defend 60 s),
+  24 Armored Patrol (heavy unit, then support troops), 25 Command
+  District (two command-post activations under elite guard), 26
+  Signal Tower (reach the tower, then hold it 90 s), 27 Breach
+  Command (outer guard, heavy guard, commander), 28 Final
+  Approach (outer defenses, heavy inner defense, reach the inner
+  gate), 29 Final Siege (first wave, heavy commander, 90 s hold),
+  30 Last Signal (final guard, final commander, activate the
+  console, escape). Stages: 21-22 Special Operations/Very Hard,
+  23-27 Final Campaign/Extreme, 28-30 Final Showdown/Elite.
+  Difficulty keeps increasing in data: later levels use more
+  heavies and commanders, larger groups, and longer defend holds
+  (60 s at Level 23, 90 s at Levels 26 and 29).
+- Commander variant (src/data/enemies.ts, data only — brain,
+  perception and combat rules unchanged): 400 HP, 16 damage,
+  chase 2.0 m/s, reload 3.0 s, stun 0.2 s, figure scale 1.5 —
+  the toughest, hardest-hitting, slowest and largest unit in the
+  game, used for the Level 27 commander guard, the Level 29 heavy
+  commander and the Level 30 final encounter, always with support
+  troops around it. Objective ordering is deliberately
+  softlock-safe: ObjectiveManager only counts kills for the
+  current eliminate objective, so a commander group is never the
+  current objective before its wave has spawned — waves spawn on
+  the previous group's clear, then the commander objective counts
+  its kill (Levels 27, 29 and 30 all follow this pattern).
+- Ending (no cutscene claimed): completing Level 30 saves
+  frontier 31 (nextUnlockedLevel already clamped at 31) and its
+  victory screen appends "Campaign complete! You finished all 30
+  missions" with the Next button replaced by "Campaign complete
+  — no next mission". The campaign list shows a
+  campaign-complete banner at frontier 31, and Continue is
+  disabled with the ending title (frontier 31 is not a mission,
+  so it must not point at a nonexistent mission 31); completed
+  missions stay replayable from their campaign cards. Reload
+  after completing 30 still shows campaign complete, because the
+  frontier is saved and the migration clamps it to 1..31.
+- Environment tints extended (rooftop, terminal, command, tower,
+  fortress, control-room) on the same reused geometry; no
+  separate 3D maps, figures remain greybox. Level 22 honesty:
+  rooftops and the sniper position are a reach + eliminate
+  objective pair in the arena geometry, not a rooftop map —
+  the same kind of stand-in as Level 18's operative marker.
+  Level 29 honesty: the final hold phase is a timer after the
+  commander falls (defend holds never re-check proximity, per
+  the Build 5 rule); the commander kill itself is a required
+  objective before the hold.
+- Test updates for the new frontier: the Build 5 and Build 6
+  unit/e2e assertions that Level 21 was unplayable / "Coming in
+  Build 7" now assert it is playable but locked behind the
+  frontier, and the Build 6 catalog test asserts all 30 playable.
+  Full Level 30 combat completion is NOT e2e-driven (a
+  multi-minute, flaky run on this VM, as allowed by the brief):
+  the ending path is proven by the seeded-frontier-31 banner
+  test, the Level 30 briefing/deploy test, and the unit-tested
+  unlock chain 20→31 — the victory-overlay ending text itself
+  was verified by code inspection, not by a driven Level 30
+  completion, and that limit is stated here plainly.
+- Suite flakiness, recorded honestly: the first full serial run
+  failed the arena spec (10 shots, 0 board hits, ammo 20/120)
+  while the other three failures were the stale "Coming in
+  Build 7" assertions above. The arena spec then passed 3/3
+  solo and passed in the second full serial run, with no code
+  change to InputAdapter or the arena — it is the known
+  pointer-lock/spread intermittency on this VM's software
+  rendering, not a Build 7 regression (no Build 7 change touches
+  the test arena path).
+- Gate results 2026-11-04: typecheck pass, lint pass (after one
+  import-type fix in build7.spec.ts), fmt pass, Vitest 91/91 (82
+  existing + 9 Build 7: commander balance, 21-30 chain/stages,
+  defend escalation, unlock chain 20→31, save clamp 1..31),
+  production build pass (dist JS 1,258.12 kB / 331.30 kB gzip),
+  Playwright serial 15/15 (boot, arena, build4, build6 x4,
+  build7 x4, enemies, mission x3 — zero console errors; full
+  suite 6.7 m), `vite preview` smoke check HTTP 200. Local
+  commit only — no GitHub push was attempted in this build; the
+  parent handles delivery. No ZIP is delivered by this build.
+- Next build recommendation: Build 8 (polish, QA and release).
+
 ## Traceability (Build 0)
 
 | Requirement                                                                                           | Module                                                                    | Evidence                                                                                             |
@@ -547,6 +635,8 @@ until the current gate passes.
 | FR-21 campaign UI (list, briefing, results)                                                           | `UISystem.ts`, `MissionCatalog.ts`, `starter.css`                         | e2e mission.spec (campaign/briefing/results screens)                                                 |
 | FR-24 no level leaks on unload                                                                        | `PlayerSystem.ts` (destroyArena), `EnemySystem.ts` (plan cleared on menu) | Serial e2e suite passes across arena + mission specs                                                 |
 | FR-17 campaign 30 missions, stage grouping (Build 6: 1-20 playable)                                   | `levels.ts`, `MissionCatalog.ts`                                          | Unit catalog tests, e2e build6.spec (11/20 unlockable, 21 locked)                                    |
+| FR-17 campaign 30 missions complete (Build 7: all playable)                                           | `levels.ts`, `MissionCatalog.ts`, `UISystem.ts` (ending state)            | Unit catalog/chain tests, e2e build7.spec (21 unlockable, frontier 31 banner, Level 30 deploy)       |
+| Commander variant + campaign ending (Build 7)                                                         | `enemies.ts` (commander), `UISystem.ts` (victory/banner/Continue)         | Unit commander balance + unlock-chain + save-clamp tests, seeded frontier-31 e2e test                |
 | FR-15/16 defend/activate/reach objectives, escalating waves (Build 6)                                 | `WaveSpawner.ts` (triggerNextWave), `MissionSystem.ts` (defend phase)     | Unit wave tests, e2e build6.spec (Level 13 defend phase)                                             |
 | Enemy variants heavy/scout (Build 6)                                                                  | `enemies.ts`, `EnemySystem.ts` (variant + figure scale)                   | Unit variant balance tests                                                                           |
 | Level 12 reduced visibility (Build 6)                                                                 | `levels.ts` (perceptionMultiplier), `EnemySystem.ts`                      | Unit validation tests, Level 12 record                                                               |
