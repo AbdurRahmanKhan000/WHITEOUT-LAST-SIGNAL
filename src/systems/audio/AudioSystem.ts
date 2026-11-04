@@ -46,6 +46,8 @@ export class AudioSystem implements GameSystem {
             }),
             bus.on('enemy.detected', () => this.playAlert()),
             bus.on('arena.cleared', () => this.playVictory()),
+            bus.on('mission.completed', () => this.playVictory()),
+            bus.on('mission.defeated', () => this.playDefeat()),
             bus.on('app.stateChanged', ({ newState }) => {
                 if (newState === 'playing') {
                     this.startAmbient();
@@ -220,6 +222,16 @@ export class AudioSystem implements GameSystem {
         }
         this.tone(ctx, 880, 0.09, this.volume * 0.35);
         this.tone(ctx, 660, 0.09, this.volume * 0.35, 'square', 0.12);
+    }
+
+    private playDefeat(): void {
+        const ctx = this.ensureContext();
+        if (ctx === null) {
+            return;
+        }
+        for (const [index, frequency] of [440, 330, 220].entries()) {
+            this.tone(ctx, frequency, 0.22, this.volume * 0.35, 'triangle', index * 0.16);
+        }
     }
 
     private playVictory(): void {

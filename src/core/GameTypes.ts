@@ -1,3 +1,5 @@
+import type { MissionStartPayload } from '../data/levels';
+
 import type { EventBus } from './EventBus';
 import type { Logger } from './Logger';
 import type { ServiceContainer } from './ServiceContainer';
@@ -128,6 +130,35 @@ export interface GameEventMap {
         readonly hits: number;
         readonly timeSeconds: number;
     };
+    'mission.requested': {
+        readonly levelId: number;
+    };
+    'mission.started': MissionStartPayload;
+    'mission.completed': {
+        readonly levelId: number;
+        readonly kills: number;
+        readonly accuracy: number;
+        readonly timeSeconds: number;
+        readonly damageReceived: number;
+        readonly score: number;
+        readonly rank: string;
+        readonly nextLevelId: number | null;
+    };
+    'mission.defeated': {
+        readonly levelId: number;
+    };
+    'mission.retryCheckpointRequested': Record<string, never>;
+    'mission.retryCheckpoint': {
+        readonly position: Vec3Tuple;
+        readonly respawnGroupIds: readonly string[];
+    };
+    'mission.objectiveChanged': {
+        readonly label: string;
+    };
+    'mission.waveTriggered': {
+        readonly groupId: string;
+    };
+    'mission.exitRequested': Record<string, never>;
     'app.stateChanged': {
         readonly previousState: GameState;
         readonly newState: GameState;

@@ -63,6 +63,83 @@ export const GRUNT: EnemyDefinition = {
     soundRange: 20
 };
 
+/**
+ * Build 6 — new enemy variants (SRS Build 6, advanced combinations).
+ * Heavy: a tougher, slower elite used for outpost waves and the data
+ * vault — double grunt health, harder hits, slower chase, longer
+ * reload, so it reads as a threat without outrunning the player.
+ * Scout: a faster, frailer patroller used for snow patrols and
+ * escorts — quicker chase and wider perception, but low health and
+ * light damage, so it pressures without one-shotting the player.
+ * Both are data only: the brain, perception and combat rules are
+ * unchanged, and difficulty scaling still applies on top of them.
+ */
+export const HEAVY: EnemyDefinition = {
+    id: 'heavy',
+    name: 'Heavy',
+    health: 200,
+    patrolSpeed: 1.2,
+    chaseSpeed: 2.4,
+    perceptionRange: 18,
+    fovDegrees: 100,
+    attackRange: 12,
+    fireIntervalSeconds: 1.0,
+    damage: 12,
+    magazineSize: 10,
+    reloadSeconds: 2.5,
+    reactionSeconds: 0.5,
+    investigateSeconds: 3,
+    stunSeconds: 0.3,
+    soundRange: 20
+};
+
+export const SCOUT: EnemyDefinition = {
+    id: 'scout',
+    name: 'Scout',
+    health: 70,
+    patrolSpeed: 2.2,
+    chaseSpeed: 4.2,
+    perceptionRange: 24,
+    fovDegrees: 110,
+    attackRange: 10,
+    fireIntervalSeconds: 0.6,
+    damage: 6,
+    magazineSize: 12,
+    reloadSeconds: 1.6,
+    reactionSeconds: 0.3,
+    investigateSeconds: 4,
+    stunSeconds: 0.4,
+    soundRange: 22
+};
+
+export type EnemyVariant = 'grunt' | 'heavy' | 'scout';
+
+/** Base definition for a variant; 'grunt' is the Build 3 default. */
+export function definitionForVariant(variant: EnemyVariant): EnemyDefinition {
+    switch (variant) {
+        case 'heavy':
+            return HEAVY;
+        case 'scout':
+            return SCOUT;
+        case 'grunt':
+        default:
+            return GRUNT;
+    }
+}
+
+/** Figure scale for a variant: heavies read bigger, scouts smaller. */
+export function figureScaleForVariant(variant: EnemyVariant): number {
+    switch (variant) {
+        case 'heavy':
+            return 1.25;
+        case 'scout':
+            return 0.9;
+        case 'grunt':
+        default:
+            return 1;
+    }
+}
+
 export interface DifficultyScale {
     /** Multiplier applied to the base damage. */
     readonly damageMultiplier: number;

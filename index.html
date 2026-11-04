@@ -21,7 +21,7 @@
                     <button id="btn-credits" type="button">Credits</button>
                 </div>
                 <p class="build-note">
-                    Build 4 — effects, positional sound and results shell. Missions arrive in Build 5.
+                    Build 5 — Levels 1–10 playable, with a polished campaign UI. Levels 11–30 arrive in Builds 6–7.
                 </p>
             </section>
             <section id="panel-settings" class="panel-view" hidden>
@@ -61,6 +61,21 @@
                 </ul>
                 <button data-back-to-menu type="button">Back to menu</button>
             </section>
+            <section id="panel-campaign" class="panel-view panel-wide" hidden>
+                <h2>Campaign</h2>
+                <p class="panel-sub">30 missions. Levels 1–10 are playable; 11–30 arrive in Builds 6–7.</p>
+                <div id="campaign-list"></div>
+                <button data-back-to-menu type="button">Back to menu</button>
+            </section>
+            <section id="panel-briefing" class="panel-view" hidden>
+                <h2 id="briefing-title">Mission briefing</h2>
+                <p id="briefing-environment" class="panel-sub"></p>
+                <h3>Objectives</h3>
+                <ul id="briefing-objectives"></ul>
+                <p id="briefing-threat" class="panel-sub"></p>
+                <button id="btn-briefing-deploy" type="button" class="primary">Deploy</button>
+                <button data-back-to-menu type="button">Back to menu</button>
+            </section>
             <section id="panel-credits" class="panel-view" hidden>
                 <h2>Credits</h2>
                 <p>
@@ -81,7 +96,6 @@
             <div class="hud-health">
                 <p id="hud-health-text">Health 100 / 100</p>
                 <div class="hud-health-track"><div id="hud-health-bar"></div></div>
-                <p id="hud-weapon-text">Assault Rifle · 30 / 120</p>
                 <p id="hud-enemy-text"></p>
                 <button id="btn-debug-damage" type="button">Debug: take 10 damage</button>
                 <p class="hud-note">
@@ -89,6 +103,23 @@
                     character. Press H for debug damage.
                 </p>
             </div>
+            <div class="hud-ammo">
+                <p id="hud-weapon-text">Assault Rifle · 30 / 120</p>
+            </div>
+        </div>
+        <div id="mission-victory-overlay" class="overlay" hidden>
+            <h2>Mission complete</h2>
+            <p id="mission-result-text">No result yet.</p>
+            <button id="btn-mission-next" type="button" class="primary">Next mission</button>
+            <button id="btn-mission-retry" type="button">Replay mission</button>
+            <button id="btn-mission-victory-menu" type="button">Back to menu</button>
+        </div>
+        <div id="mission-defeat-overlay" class="overlay" hidden>
+            <h2>Mission failed</h2>
+            <p id="mission-defeat-text">No details yet.</p>
+            <button id="btn-mission-retry-checkpoint" type="button" class="primary">Retry from checkpoint</button>
+            <button id="btn-mission-restart" type="button">Restart mission</button>
+            <button id="btn-mission-defeat-menu" type="button">Back to menu</button>
         </div>
         <div id="results-overlay" class="overlay" hidden>
             <h2>Arena cleared</h2>

@@ -42,6 +42,11 @@ export class WeaponController {
         this.reloadTimer = 0;
     }
 
+    /** Build 5: override the rifle reserve after reset (e.g. Level 9's limited ammo). */
+    setRifleReserve(reserve: number): void {
+        this.reserves.set('rifle', Math.max(0, reserve));
+    }
+
     get currentId(): WeaponId {
         return this.current;
     }

@@ -12,8 +12,11 @@ import {
     TEST_ARENA_PATROL_ROUTE,
     TEST_ARENA_SPAWNS,
     TEST_ARENA_WAYPOINTS,
-    enemyDefinitionForDifficulty
+    definitionForVariant,
+    enemyDefinitionForDifficulty,
+    figureScaleForVariant
 } from '../../data/enemies';
+import type { EnemyGroupDefinition } from '../../data/levels';
 import { raycastScene } from '../../services/raycast';
 import type { Aabb3 } from '../../services/raycast';
 
@@ -112,6 +115,15 @@ export class EnemySystem implements GameSystem {
     private blockers: readonly Aabb3[] = [];
     private hudTimer = 0.25;
     private shotCounter = 0;
+    // Build 5 mission mode: the spawn plan comes from mission.started,
+    // never from the fixed arena spawns. Groups are instantiated lazily
+    // in update (initial groups) or on wave/retry events, so the plan
+    // can arrive in any subscription order relative to PlayerSystem.
+    private missionGroups: readonly EnemyGroupDefinition[] | null = null;
+    private instantiatedGroups = new Set<string>();
+    // Build 6: perception multiplier for the active mission (Level 12
+    // reduced visibility). Reset on mainMenu, like the spawn plan.
+    private missionPerceptionMultiplier = 1;
 
     initialize(context: GameContext): void {
         this.eventBus = context.eventBus;
@@ -140,7 +152,42 @@ export class EnemySystem implements GameSystem {
                 this.onHitConfirmed(sourceId, targetId, damage)
             ),
             context.eventBus.on('weapon.fired', ({ ownerId, origin }) => this.onWeaponFired(ownerId, origin)),
-            context.eventBus.on('arena.restarted', () => this.resetOrSpawn())
+            context.eventBus.on('arena.restarted', () => {
+                // Arena restart only: in mission mode restarts come via
+                // mission.requested / mission.started, never this event.
+                if (this.missionGroups === null) {
+                    this.resetOrSpawn();
+                }
+            }),
+            context.eventBus.on('mission.started', ({ groups, perceptionMultiplier }) => {
+                this.destroyEnemies();
+                this.missionGroups = groups;
+                this.instantiatedGroups = new Set<string>();
+                this.missionPerceptionMultiplier = perceptionMultiplier;
+            }),
+            context.eventBus.on('mission.waveTriggered', ({ groupId }) => {
+                if (this.missionGroups === null || this.instantiatedGroups.has(groupId)) {
+                    return;
+                }
+                const group = this.missionGroups.find((candidate) => candidate.id === groupId);
+                if (group !== undefined) {
+                    this.instantiatedGroups.add(groupId);
+                    this.spawnMissionGroup(group);
+                }
+            }),
+            context.eventBus.on('mission.retryCheckpoint', ({ respawnGroupIds }) => {
+                if (this.missionGroups === null) {
+                    return;
+                }
+                this.destroyEnemies();
+                this.instantiatedGroups = new Set<string>(respawnGroupIds);
+                for (const groupId of respawnGroupIds) {
+                    const group = this.missionGroups.find((candidate) => candidate.id === groupId);
+                    if (group !== undefined) {
+                        this.spawnMissionGroup(group);
+                    }
+                }
+            })
         );
     }
 
@@ -151,6 +198,9 @@ export class EnemySystem implements GameSystem {
             if (this.enemies.length > 0) {
                 this.destroyEnemies();
             }
+            this.missionGroups = null;
+            this.instantiatedGroups.clear();
+            this.missionPerceptionMultiplier = 1;
             return;
         }
         if (this.stateMachine?.current !== 'playing') {
@@ -160,7 +210,14 @@ export class EnemySystem implements GameSystem {
         if (snapshot === null) {
             return;
         }
-        if (this.enemies.length === 0) {
+        if (this.missionGroups !== null) {
+            for (const group of this.missionGroups) {
+                if (group.waveAfter === undefined && !this.instantiatedGroups.has(group.id)) {
+                    this.instantiatedGroups.add(group.id);
+                    this.spawnMissionGroup(group);
+                }
+            }
+        } else if (this.enemies.length === 0) {
             this.spawnEnemies();
         }
         for (const runtime of this.enemies) {
@@ -227,21 +284,27 @@ export class EnemySystem implements GameSystem {
             }));
     }
 
-    private spawnEnemies(): void {
+    /** Build 5: one enemy figure + brain. Shared by arena and mission spawns. */
+    private spawnOne(
+        spawn: { readonly id: string; readonly x: number; readonly z: number },
+        patrolRoute: readonly Vec2[],
+        baseDefinition = GRUNT,
+        figureScale = 1
+    ): void {
         if (this.app === null || this.graph === null) {
             return;
         }
-        const patrolRoute: readonly Vec2[] = TEST_ARENA_PATROL_ROUTE.map((id) => {
-            const waypoint = TEST_ARENA_WAYPOINTS.find((candidate) => candidate.id === id);
-            return { x: waypoint?.x ?? 0, z: waypoint?.z ?? 0 };
-        });
         const coverPoints: readonly Vec2[] = TEST_ARENA_WAYPOINTS.filter((waypoint) => waypoint.cover).map(
             (waypoint) => ({ x: waypoint.x, z: waypoint.z })
         );
-        for (const spawn of TEST_ARENA_SPAWNS) {
+        {
+            const scaled = enemyDefinitionForDifficulty(baseDefinition, DEFAULT_DIFFICULTY);
             const brain = new EnemyBrain({
                 id: spawn.id,
-                definition: enemyDefinitionForDifficulty(GRUNT, DEFAULT_DIFFICULTY),
+                definition: {
+                    ...scaled,
+                    perceptionRange: scaled.perceptionRange * this.missionPerceptionMultiplier
+                },
                 spawn: { x: spawn.x, z: spawn.z },
                 patrolRoute,
                 coverPoints,
@@ -272,6 +335,7 @@ export class EnemySystem implements GameSystem {
             const rightArm = makeLimb(`${spawn.id}-arm-right`, 0.42, false);
             leftArm.setLocalEulerAngles(80, 0, 0);
             rightArm.setLocalEulerAngles(80, 0, 0);
+            root.setLocalScale(figureScale, figureScale, figureScale);
             this.app.root.addChild(root);
             this.enemies.push({
                 brain,
@@ -286,6 +350,29 @@ export class EnemySystem implements GameSystem {
             this.syncFigure(this.enemies[this.enemies.length - 1]);
         }
         this.updateHudText();
+    }
+
+    private spawnEnemies(): void {
+        const patrolRoute: readonly Vec2[] = TEST_ARENA_PATROL_ROUTE.map((id) => {
+            const waypoint = TEST_ARENA_WAYPOINTS.find((candidate) => candidate.id === id);
+            return { x: waypoint?.x ?? 0, z: waypoint?.z ?? 0 };
+        });
+        for (const spawn of TEST_ARENA_SPAWNS) {
+            this.spawnOne(spawn, patrolRoute);
+        }
+    }
+
+    /** Build 5: spawn one mission group. Stationary groups patrol a single point (their own spawn). */
+    private spawnMissionGroup(group: EnemyGroupDefinition): void {
+        const patrolRoute: readonly Vec2[] = TEST_ARENA_PATROL_ROUTE.map((id) => {
+            const waypoint = TEST_ARENA_WAYPOINTS.find((candidate) => candidate.id === id);
+            return { x: waypoint?.x ?? 0, z: waypoint?.z ?? 0 };
+        });
+        const variant = group.variant ?? 'grunt';
+        for (const spawn of group.spawns) {
+            const route = group.patrolMode === 'stationary' ? [{ x: spawn.x, z: spawn.z }] : patrolRoute;
+            this.spawnOne(spawn, route, definitionForVariant(variant), figureScaleForVariant(variant));
+        }
     }
 
     private destroyEnemies(): void {

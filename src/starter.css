@@ -59,6 +59,19 @@ h2 {
     color: #cbd5e1;
 }
 
+/* Build 5 UI polish: one dark theme, one accent, consistent hierarchy.
+ * Accent is the title red (#e11d48); actions stay cyan so the menu,
+ * overlays and settings read as one game, not three. No radar or
+ * minimap is shipped — the SRS allows radar only if it improves
+ * navigation, and a faked one would not. */
+:root {
+    --accent: #e11d48;
+    --action: #0ea5e9;
+    --action-border: #38bdf8;
+    --panel: #0f1e33;
+    --text-dim: #cbd5e1;
+}
+
 .menu-buttons,
 .panel-view label {
     display: grid;
@@ -68,17 +81,132 @@ h2 {
 
 button {
     padding: 10px 16px;
-    border: 1px solid #38bdf8;
+    border: 1px solid var(--action-border);
     border-radius: 8px;
-    background: #0ea5e9;
+    background: var(--action);
     color: #fff;
     font-size: 1rem;
+    font-weight: 600;
     cursor: pointer;
+    transition:
+        filter 0.15s ease,
+        transform 0.1s ease,
+        background 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+    filter: brightness(1.15);
+}
+
+button:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+button.primary {
+    border-color: var(--accent);
+    background: var(--accent);
 }
 
 button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.panel-wide {
+    width: min(720px, calc(100vw - 40px));
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+}
+
+.panel-sub {
+    color: var(--text-dim);
+}
+
+#campaign-list {
+    display: grid;
+    gap: 16px;
+    margin: 16px 0;
+}
+
+.campaign-stage {
+    margin: 8px 0 0;
+    color: #fff;
+    font-size: 0.85rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.campaign-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.level-card {
+    display: grid;
+    gap: 6px;
+    padding: 14px;
+    border: 1px solid #ffffff24;
+    border-radius: 10px;
+    background: #16283f;
+}
+
+.level-card.locked {
+    opacity: 0.75;
+}
+
+.level-card h4 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.level-card p {
+    margin: 0;
+}
+
+.level-meta,
+.level-objective,
+.best-result {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
+
+.difficulty-badge {
+    justify-self: start;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #334155;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.difficulty-easy {
+    background: #166534;
+}
+
+.difficulty-moderate {
+    background: #92400e;
+}
+
+.difficulty-hard {
+    background: #991b1b;
+}
+
+.difficulty-very-hard,
+.difficulty-extreme,
+.difficulty-elite {
+    background: #581c87;
+}
+
+#briefing-objectives {
+    margin: 12px 0;
+    padding-left: 20px;
+    line-height: 1.6;
 }
 
 .overlay {
@@ -191,7 +319,9 @@ button:disabled {
     left: 50%;
     translate: -50% 0;
     color: #facc15;
-    font-weight: 700;
+    font-size: 1.1rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
     text-shadow: 0 1px 3px #000;
 }
 
@@ -208,5 +338,56 @@ button:disabled {
 }
 
 #hud-event-log li {
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    padding: 4px 10px;
+    border-right: 3px solid var(--accent);
+    border-radius: 4px;
+    background: rgb(4 10 20 / 0.55);
+}
+
+/* Build 5 HUD layout: health bottom-left, ammo bottom-right, objective
+ * tracker top. The mission-mode class (set by PlayerSystem on mission
+ * start) hides every debug element, so campaign missions look clean
+ * while the test arena keeps its debug HUD exactly as before. */
+.hud-ammo {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    text-align: right;
+}
+
+.hud-ammo p {
+    margin: 4px 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-shadow: 0 1px 3px #000;
+}
+
+#arena-hud.mission-mode #btn-debug-damage,
+#arena-hud.mission-mode .hud-note,
+#arena-hud.mission-mode #hud-debug-text {
+    display: none;
+}
+
+#arena-hud.mission-mode .hud-objective {
+    top: 12px;
+    padding: 8px 12px;
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    background: rgb(4 10 20 / 0.55);
+    color: #fff;
+}
+
+.hud-health.low-health #hud-health-bar {
+    background: #dc2626;
+    animation: low-health-pulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes low-health-pulse {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0.45;
+    }
 }

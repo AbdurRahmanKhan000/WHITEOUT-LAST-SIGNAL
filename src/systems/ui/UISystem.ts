@@ -1,17 +1,20 @@
 import type { EventBus } from '../../core/EventBus';
-import type { GameContext, GameSystem, Settings } from '../../core/GameTypes';
+import type { GameContext, GameSystem, SaveData, Settings } from '../../core/GameTypes';
 import type { SaveRepository } from '../../services/SaveRepository';
+import { catalogByStage, findLevel } from '../mission/MissionCatalog';
 
 import { ArenaStats } from './arenaStats';
 
 /**
  * Build 0 menu / loading / error shell (SRS sections 2, 4.2, 7-E),
  * extended in Build 4 with the arena HUD objective, damage flash and
- * results shell (SRS section 7-E, Build 4 gate). Campaign missions
- * still arrive in Build 5: the Campaign button shows the loading
- * shell honestly instead of faking a mission, and the results shell
- * covers the test arena only — its enemy total (3) is the test-arena
- * constant, replaced by mission data in Build 5.
+ * results shell (SRS section 7-E, Build 4 gate), and in Build 5 with
+ * the campaign list, briefing, mission victory/defeat screens and the
+ * modern-shooter UI polish (see starter.css). The arena results shell
+ * covers the test arena only; mission results are the separate
+ * mission victory/defeat overlays. Briefing is a menu panel, not a
+ * runtime state — the state machine's briefing state is unused, the
+ * same way Settings is an overlay rather than a state.
  */
 export class UISystem implements GameSystem {
     readonly name = 'ui';
@@ -22,12 +25,18 @@ export class UISystem implements GameSystem {
     private readonly stats = new ArenaStats();
     private resultsShown = false;
     private flashTimer: number | null = null;
+    private missionActive = false;
+    private currentMissionId = 0;
+    private currentMissionNext: number | null = null;
+    private pendingBriefingLevel = 0;
+    private lastSave: SaveData | null = null;
 
     initialize(context: GameContext): void {
         this.eventBus = context.eventBus;
         this.save = context.services.get<SaveRepository>('save');
         this.bind();
         this.subscribeArena();
+        this.subscribeMission();
         void this.loadSettings();
     }
 
@@ -63,26 +72,35 @@ export class UISystem implements GameSystem {
         }
         this.cleanups.push(
             this.eventBus.on('app.stateChanged', ({ previousState, newState }) => {
-                if (newState === 'playing' && previousState === 'loading') {
+                // Build 5: mission transitions go through loading too,
+                // but the arena stats/objective must not overwrite the
+                // mission objective when a mission starts.
+                if (newState === 'playing' && previousState === 'loading' && !this.missionActive) {
                     this.resetArena();
                 }
                 if (newState === 'mainMenu') {
+                    this.missionActive = false;
                     this.hideResults();
+                    this.hideMissionOverlays();
                 }
             }),
-            this.eventBus.on('arena.restarted', () => this.resetArena()),
+            this.eventBus.on('arena.restarted', () => {
+                if (!this.missionActive) {
+                    this.resetArena();
+                }
+            }),
             this.eventBus.on('weapon.fired', ({ ownerId }) => {
-                if (ownerId === 'player') {
+                if (ownerId === 'player' && !this.missionActive) {
                     this.stats.onShot();
                 }
             }),
             this.eventBus.on('combat.hitConfirmed', ({ sourceId }) => {
-                if (sourceId === 'player') {
+                if (sourceId === 'player' && !this.missionActive) {
                     this.stats.onHit();
                 }
             }),
             this.eventBus.on('entity.died', ({ entityType }) => {
-                if (entityType !== 'enemy' || this.resultsShown) {
+                if (entityType !== 'enemy' || this.resultsShown || this.missionActive) {
                     return;
                 }
                 this.stats.onKill();
@@ -135,6 +153,178 @@ export class UISystem implements GameSystem {
         );
     }
 
+    private hideMissionOverlays(): void {
+        for (const id of ['mission-victory-overlay', 'mission-defeat-overlay']) {
+            const overlay = document.getElementById(id);
+            if (overlay !== null) {
+                overlay.hidden = true;
+            }
+        }
+    }
+
+    private setMissionObjective(label: string): void {
+        const element = document.getElementById('hud-objective-text');
+        if (element !== null) {
+            element.textContent = label;
+        }
+    }
+
+    private subscribeMission(): void {
+        if (this.eventBus === null) {
+            return;
+        }
+        this.cleanups.push(
+            this.eventBus.on('mission.started', ({ levelId, objectiveLabel }) => {
+                this.missionActive = true;
+                this.currentMissionId = levelId;
+                this.hideMissionOverlays();
+                this.hideResults();
+                this.setMissionObjective(objectiveLabel);
+            }),
+            this.eventBus.on('mission.objectiveChanged', ({ label }) => {
+                if (this.missionActive) {
+                    this.setMissionObjective(label);
+                }
+            }),
+            this.eventBus.on('mission.retryCheckpoint', () => {
+                const overlay = document.getElementById('mission-defeat-overlay');
+                if (overlay !== null) {
+                    overlay.hidden = true;
+                }
+            }),
+            this.eventBus.on('mission.completed', (result) => {
+                this.currentMissionNext = result.nextLevelId;
+                const level = findLevel(result.levelId);
+                const text = document.getElementById('mission-result-text');
+                if (text !== null) {
+                    text.textContent =
+                        `${level?.name ?? `Level ${result.levelId}`} complete · ` +
+                        `Kills ${result.kills} · Accuracy ${result.accuracy}% · ` +
+                        `Time ${result.timeSeconds}s · Damage ${result.damageReceived} · ` +
+                        `Score ${result.score} · Rank ${result.rank}`;
+                }
+                const nextButton = document.getElementById('btn-mission-next') as HTMLButtonElement | null;
+                if (nextButton !== null) {
+                    const hasNext = result.nextLevelId !== null && findLevel(result.nextLevelId) !== null;
+                    nextButton.disabled = !hasNext;
+                    nextButton.textContent = hasNext
+                        ? `Next mission: Level ${result.nextLevelId}`
+                        : 'More missions arrive in Build 7';
+                }
+                const overlay = document.getElementById('mission-victory-overlay');
+                if (overlay !== null) {
+                    overlay.hidden = false;
+                }
+            }),
+            this.eventBus.on('mission.defeated', ({ levelId }) => {
+                const level = findLevel(levelId);
+                const text = document.getElementById('mission-defeat-text');
+                if (text !== null) {
+                    text.textContent = `${level?.name ?? `Level ${levelId}`} — mission failed. Retry from your last checkpoint, restart the mission, or return to the menu.`;
+                }
+                const overlay = document.getElementById('mission-defeat-overlay');
+                if (overlay !== null) {
+                    overlay.hidden = false;
+                }
+            })
+        );
+    }
+
+    /** Campaign list as stage-grouped level cards (Build 5 UI polish). */
+    private renderCampaign(save: SaveData): void {
+        const list = document.getElementById('campaign-list');
+        if (list === null) {
+            return;
+        }
+        list.innerHTML = '';
+        for (const { stage, entries } of catalogByStage()) {
+            const heading = document.createElement('h3');
+            heading.className = 'campaign-stage';
+            heading.textContent = stage;
+            list.appendChild(heading);
+            const grid = document.createElement('div');
+            grid.className = 'campaign-grid';
+            for (const entry of entries) {
+                const card = document.createElement('article');
+                const unlocked = entry.playable && entry.id <= save.unlockedLevel;
+                const best = save.bestResults[String(entry.id)];
+                card.className = `level-card${unlocked ? '' : ' locked'}`;
+                const title = document.createElement('h4');
+                title.textContent = `${entry.id}. ${entry.name}`;
+                card.appendChild(title);
+                const meta = document.createElement('p');
+                meta.className = 'level-meta';
+                meta.textContent = entry.environment;
+                card.appendChild(meta);
+                if (entry.difficulty !== undefined) {
+                    const badge = document.createElement('span');
+                    badge.className = `difficulty-badge difficulty-${entry.difficulty.toLowerCase().replace(' ', '-')}`;
+                    badge.textContent = entry.difficulty;
+                    card.appendChild(badge);
+                }
+                const objective = document.createElement('p');
+                objective.className = 'level-objective';
+                objective.textContent = entry.objectiveSummary;
+                card.appendChild(objective);
+                if (best !== undefined) {
+                    const bestLine = document.createElement('p');
+                    bestLine.className = 'best-result';
+                    bestLine.textContent = `Best: score ${best.score} · ${best.kills} kills · ${best.accuracy}% accuracy`;
+                    card.appendChild(bestLine);
+                }
+                const action = document.createElement('button');
+                action.type = 'button';
+                if (!entry.playable) {
+                    action.disabled = true;
+                    action.textContent = `Coming in ${entry.comingIn ?? 'a later build'}`;
+                } else if (unlocked) {
+                    action.textContent = 'Play';
+                    action.addEventListener('click', () => this.showBriefing(entry.id));
+                } else {
+                    action.disabled = true;
+                    action.textContent = `Locked — complete level ${save.unlockedLevel} first`;
+                }
+                card.appendChild(action);
+                grid.appendChild(card);
+            }
+            list.appendChild(grid);
+        }
+    }
+
+    private showBriefing(levelId: number): void {
+        const level = findLevel(levelId);
+        if (level === null) {
+            return;
+        }
+        this.pendingBriefingLevel = levelId;
+        const set = (id: string, value: string): void => {
+            const element = document.getElementById(id);
+            if (element !== null) {
+                element.textContent = value;
+            }
+        };
+        set('briefing-title', `${level.id}. ${level.name}`);
+        set('briefing-environment', `${level.environment} · ${level.stage} · ${level.difficulty}`);
+        const objectives = document.getElementById('briefing-objectives');
+        if (objectives !== null) {
+            objectives.innerHTML = '';
+            for (const objective of level.objectives) {
+                const item = document.createElement('li');
+                item.textContent = objective.label;
+                objectives.appendChild(item);
+            }
+        }
+        const enemyCount = level.enemySpawnGroups.reduce((total, group) => total + group.spawns.length, 0);
+        set(
+            'briefing-threat',
+            `${enemyCount} enemies in ${level.enemySpawnGroups.length} group${level.enemySpawnGroups.length === 1 ? '' : 's'}` +
+                `${level.rifleReserve !== undefined ? ` · Rifle reserve ${level.rifleReserve}` : ''}`
+        );
+        for (const panel of document.querySelectorAll<HTMLElement>('.panel-view')) {
+            panel.hidden = panel.id !== 'panel-briefing';
+        }
+    }
+
     private bind(): void {
         const $ = (id: string): HTMLElement | null => document.getElementById(id);
         const status = $('app-status');
@@ -167,11 +357,54 @@ export class UISystem implements GameSystem {
         }
 
         on($('btn-campaign'), 'click', () => {
-            if (menu !== null) menu.hidden = true;
-            if (loading !== null) loading.hidden = false;
-            if (status !== null) {
-                status.textContent = 'Build 0 shell: no mission bundle is loaded yet. Missions arrive in Build 5.';
+            void (async () => {
+                if (this.save !== null) {
+                    this.lastSave = await this.save.load();
+                    this.renderCampaign(this.lastSave);
+                }
+                showPanel('panel-campaign');
+            })();
+        });
+        on($('btn-continue'), 'click', () => {
+            const unlocked = this.lastSave?.unlockedLevel ?? 1;
+            // Build 6: Continue follows the playable catalog, not a
+            // hard-coded Build 5 cap — an unlocked-but-unbuilt level
+            // (e.g. 21 after completing 20) lands on the campaign
+            // list instead of a broken briefing.
+            if (findLevel(unlocked) !== null) {
+                this.showBriefing(unlocked);
+            } else {
+                showPanel('panel-campaign');
             }
+        });
+        on($('btn-briefing-deploy'), 'click', () => {
+            if (this.pendingBriefingLevel > 0) {
+                this.eventBus?.emit('mission.requested', { levelId: this.pendingBriefingLevel });
+            }
+        });
+        on($('btn-mission-next'), 'click', () => {
+            if (this.currentMissionNext !== null && findLevel(this.currentMissionNext) !== null) {
+                this.eventBus?.emit('mission.requested', { levelId: this.currentMissionNext });
+            }
+        });
+        on($('btn-mission-retry'), 'click', () => {
+            if (this.currentMissionId > 0) {
+                this.eventBus?.emit('mission.requested', { levelId: this.currentMissionId });
+            }
+        });
+        on($('btn-mission-victory-menu'), 'click', () => {
+            this.eventBus?.emit('mission.exitRequested', {});
+        });
+        on($('btn-mission-retry-checkpoint'), 'click', () => {
+            this.eventBus?.emit('mission.retryCheckpointRequested', {});
+        });
+        on($('btn-mission-restart'), 'click', () => {
+            if (this.currentMissionId > 0) {
+                this.eventBus?.emit('mission.requested', { levelId: this.currentMissionId });
+            }
+        });
+        on($('btn-mission-defeat-menu'), 'click', () => {
+            this.eventBus?.emit('mission.exitRequested', {});
         });
         on($('btn-loading-back'), 'click', () => {
             if (loading !== null) loading.hidden = true;
@@ -229,7 +462,9 @@ export class UISystem implements GameSystem {
             return;
         }
         const data = await this.save.load();
+        this.lastSave = data;
         this.applySettings(data.settings);
+        this.renderCampaign(data);
         const continueButton = document.getElementById('btn-continue') as HTMLButtonElement | null;
         if (continueButton !== null) {
             continueButton.disabled = data.unlockedLevel <= 1;

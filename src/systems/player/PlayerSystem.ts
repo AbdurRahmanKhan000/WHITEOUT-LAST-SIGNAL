@@ -1,9 +1,10 @@
-import type { AppBase, Entity } from 'playcanvas';
+import type { AppBase, Entity, LightComponent } from 'playcanvas';
 import { Entity as PlayEntity } from 'playcanvas';
 
 import type { GameStateMachine } from '../../app/GameStateMachine';
 import type { EventBus } from '../../core/EventBus';
 import type { GameContext, GameSystem } from '../../core/GameTypes';
+import type { MissionStartPayload, ZoneDefinition } from '../../data/levels';
 import type { WeaponId } from '../../data/weapons';
 import { applyDamage } from '../../services/DamageService';
 import { raycastScene } from '../../services/raycast';
@@ -120,6 +121,12 @@ export class PlayerSystem implements GameSystem {
     private pitch = 0;
     private sensitivity = 1;
     private health = PLAYER_MAX_HEALTH;
+    // Build 5 mission mode: set on mission.started, cleared on exit to
+    // the menu. In mission mode there are no target boards, death is
+    // defeat (not respawn), and pause Restart restarts the mission.
+    private missionActive = false;
+    private missionLevelId = 0;
+    private missionRifleReserve = 120;
     private verticalVelocity = 0;
     private grounded = true;
     private previousPauseKey = false;
@@ -174,7 +181,25 @@ export class PlayerSystem implements GameSystem {
             context.eventBus.on('weapon.reloadStarted', ({ weaponId }) => log(`Reloading ${weaponId}…`)),
             context.eventBus.on('weapon.reloadCompleted', ({ weaponId, magazine, reserve }) =>
                 log(`Reloaded ${weaponId} ${magazine} / ${reserve}`)
-            )
+            ),
+            context.eventBus.on('mission.started', (payload) => this.startMission(payload)),
+            context.eventBus.on('mission.retryCheckpoint', ({ position }) => this.retryCheckpoint(position)),
+            context.eventBus.on('mission.exitRequested', () => {
+                this.missionActive = false;
+                this.exitToMenu();
+            }),
+            context.eventBus.on('app.stateChanged', ({ newState }) => {
+                if (newState === 'mainMenu') {
+                    this.missionActive = false;
+                }
+                // Build 5: victory/defeat overlays need the mouse, so
+                // the pointer lock must be released when they appear.
+                // (Defeat already releases in damage(); victory does not
+                // go through damage, so it releases here.)
+                if (newState === 'victory') {
+                    this.input?.releasePointerLock();
+                }
+            })
         );
         try {
             const save = context.services.get<SaveRepository>('save');
@@ -325,6 +350,10 @@ export class PlayerSystem implements GameSystem {
             return;
         }
         this.hideResults();
+        const arenaHud = document.getElementById('arena-hud');
+        if (arenaHud !== null) {
+            arenaHud.classList.remove('mission-mode');
+        }
         this.buildArena();
         this.weapon?.reset();
         const menu = document.getElementById('main-menu');
@@ -340,6 +369,15 @@ export class PlayerSystem implements GameSystem {
 
     private restartArena(): void {
         if (this.playerRoot === null || this.stateMachine === null || this.input === null) {
+            return;
+        }
+        // In mission mode the pause menu's Restart is a full mission
+        // restart, not an arena respawn: the mission flow rebuilds the
+        // arena and the enemy plan from the level record.
+        if (this.missionActive) {
+            const pause = document.getElementById('pause-overlay');
+            if (pause !== null) pause.hidden = true;
+            this.eventBus?.emit('mission.requested', { levelId: this.missionLevelId });
             return;
         }
         this.hideResults();
@@ -359,6 +397,10 @@ export class PlayerSystem implements GameSystem {
             return;
         }
         this.hideResults();
+        const hudElement = document.getElementById('arena-hud');
+        if (hudElement !== null) {
+            hudElement.classList.remove('mission-mode');
+        }
         this.destroyArena();
         const pause = document.getElementById('pause-overlay');
         if (pause !== null) pause.hidden = true;
@@ -409,8 +451,92 @@ export class PlayerSystem implements GameSystem {
             delta: -amount
         });
         if (this.health <= 0) {
-            this.respawn();
+            // Build 5: in mission mode death is defeat, not respawn.
+            // MissionSystem shows the defeat screen (with retry from
+            // checkpoint) when it sees the defeat state.
+            if (this.missionActive) {
+                this.input?.releasePointerLock();
+                this.stateMachine?.transitionTo('defeat');
+            } else {
+                this.respawn();
+            }
         }
+        this.updateHud(0, 0, false, false);
+    }
+
+    /** Shared playing transition: paused resumes directly, every other state goes via loading. */
+    private transitionToPlaying(): void {
+        if (this.stateMachine === null) {
+            return;
+        }
+        if (this.stateMachine.current === 'playing') {
+            return;
+        }
+        if (this.stateMachine.current === 'paused') {
+            this.stateMachine.transitionTo('playing');
+            return;
+        }
+        this.stateMachine.transitionTo('loading');
+        this.stateMachine.transitionTo('playing');
+    }
+
+    private startMission(payload: MissionStartPayload): void {
+        if (this.app === null || this.stateMachine === null || this.input === null) {
+            return;
+        }
+        this.hideResults();
+        const pause = document.getElementById('pause-overlay');
+        if (pause !== null) pause.hidden = true;
+        if (this.arena !== null) {
+            this.destroyArena();
+        }
+        // Build 5 UI polish: mission HUD is clean — no debug button,
+        // no greybox note, no debug coordinates. The arena keeps them.
+        const hudElement = document.getElementById('arena-hud');
+        if (hudElement !== null) {
+            hudElement.classList.add('mission-mode');
+        }
+        this.missionActive = true;
+        this.missionLevelId = payload.levelId;
+        this.missionRifleReserve = payload.rifleReserve;
+        this.buildArena({
+            spawnX: payload.playerSpawn.x,
+            spawnZ: payload.playerSpawn.z,
+            includeTargets: false,
+            zones: payload.zones,
+            tint: payload.environmentTint
+        });
+        this.weapon?.reset();
+        this.weapon?.setRifleReserve(payload.rifleReserve);
+        const menu = document.getElementById('main-menu');
+        if (menu !== null) menu.hidden = true;
+        const hud = document.getElementById('arena-hud');
+        if (hud !== null) hud.hidden = false;
+        this.transitionToPlaying();
+        this.input.requestPointerLock();
+        this.input.consumeLeftClick();
+        this.updateHud(0, 0, false, false);
+    }
+
+    private retryCheckpoint(position: readonly [number, number, number]): void {
+        if (this.playerRoot === null || this.stateMachine === null || this.input === null) {
+            return;
+        }
+        this.playerRoot.setPosition(position[0], 0, position[2]);
+        this.verticalVelocity = 0;
+        this.grounded = true;
+        const previousHealth = this.health;
+        this.health = PLAYER_MAX_HEALTH;
+        this.eventBus?.emit('player.healthChanged', {
+            current: this.health,
+            maximum: PLAYER_MAX_HEALTH,
+            delta: PLAYER_MAX_HEALTH - previousHealth
+        });
+        this.weapon?.reset();
+        this.weapon?.setRifleReserve(this.missionRifleReserve);
+        this.transitionToPlaying();
+        this.input.requestPointerLock();
+        this.input.consumeLeftClick();
         this.updateHud(0, 0, false, false);
     }
 
@@ -684,10 +810,20 @@ export class PlayerSystem implements GameSystem {
         });
     }
 
-    private buildArena(): void {
+    private buildArena(
+        options: {
+            readonly spawnX?: number;
+            readonly spawnZ?: number;
+            readonly includeTargets?: boolean;
+            readonly zones?: readonly ZoneDefinition[];
+            readonly tint?: { readonly clear: readonly [number, number, number]; readonly lightIntensity: number };
+        } = {}
+    ): void {
         if (this.app === null) {
             return;
         }
+        const spawnX = options.spawnX ?? SPAWN.x;
+        const spawnZ = options.spawnZ ?? SPAWN.z;
         const arena = new PlayEntity('arena');
         arena.addChild(boxEntity('floor', 40, 0.2, 40, 0, -0.1, 0));
         arena.addChild(boxEntity('wall-north', 41, 3, 1, 0, 1.5, -20));
@@ -711,7 +847,7 @@ export class PlayerSystem implements GameSystem {
         }
 
         const player = new PlayEntity('player');
-        player.setPosition(SPAWN.x, 0, SPAWN.z);
+        player.setPosition(spawnX, 0, spawnZ);
         const torso = boxEntity('torso', 0.6, 0.9, 0.35, 0, 1.15, 0);
         const head = new PlayEntity('head');
         head.addComponent('render', { type: 'sphere' });
@@ -733,30 +869,39 @@ export class PlayerSystem implements GameSystem {
         this.rightArm = makeLimb('arm-right', 0.42, false);
         this.torso = torso;
 
-        for (const spot of TARGET_SPOTS) {
-            const group = new PlayEntity(spot.id);
-            group.setLocalPosition(spot.x, 0, spot.z);
-            const board = boxEntity(`${spot.id}-board`, 1.2, 1.8, 0.1, 0, 1.1, 0);
-            const stand = boxEntity(`${spot.id}-stand`, 0.15, 0.4, 0.15, 0, 0.2, 0);
-            group.addChild(board);
-            group.addChild(stand);
-            arena.addChild(group);
-            this.targets.push({
-                id: spot.id,
-                group,
-                aabb: {
-                    minX: spot.x - 0.6,
-                    maxX: spot.x + 0.6,
-                    minY: 0.2,
-                    maxY: 2.0,
-                    minZ: spot.z - 0.05,
-                    maxZ: spot.z + 0.05
-                },
-                health: 50,
-                maxHealth: 50,
-                alive: true,
-                respawnTimer: 0
-            });
+        // Build 5: mission mode has no target boards — the objectives
+        // are enemies and zones, not boards. Arena mode is unchanged.
+        if (options.includeTargets !== false) {
+            for (const spot of TARGET_SPOTS) {
+                const group = new PlayEntity(spot.id);
+                group.setLocalPosition(spot.x, 0, spot.z);
+                const board = boxEntity(`${spot.id}-board`, 1.2, 1.8, 0.1, 0, 1.1, 0);
+                const stand = boxEntity(`${spot.id}-stand`, 0.15, 0.4, 0.15, 0, 0.2, 0);
+                group.addChild(board);
+                group.addChild(stand);
+                arena.addChild(group);
+                this.targets.push({
+                    id: spot.id,
+                    group,
+                    aabb: {
+                        minX: spot.x - 0.6,
+                        maxX: spot.x + 0.6,
+                        minY: 0.2,
+                        maxY: 2.0,
+                        minZ: spot.z - 0.05,
+                        maxZ: spot.z + 0.05
+                    },
+                    health: 50,
+                    maxHealth: 50,
+                    alive: true,
+                    respawnTimer: 0
+                });
+            }
+        }
+        // Build 5: objective zones are flat marker boxes on the floor,
+        // so activate/reach/defend zones are visible in the world.
+        for (const zone of options.zones ?? []) {
+            arena.addChild(boxEntity(`zone-${zone.id}`, zone.size, 0.2, zone.size, zone.x, 0.1, zone.z));
         }
         const tracer = boxEntity('tracer', 0.03, 0.03, 1, 0, -10, 0);
         tracer.enabled = false;
@@ -780,6 +925,20 @@ export class PlayerSystem implements GameSystem {
         this.playerRoot = player;
         const foundCamera = this.app.root.findByName('camera');
         this.camera = foundCamera instanceof PlayEntity ? foundCamera : null;
+        // Build 5: per-environment tint, restored in destroyArena.
+        if (options.tint !== undefined && this.camera !== null) {
+            const cameraComponent = this.camera.findComponent('camera');
+            if (cameraComponent !== null && cameraComponent !== undefined) {
+                cameraComponent.clearColor.set(options.tint.clear[0], options.tint.clear[1], options.tint.clear[2]);
+            }
+            const lightEntity = this.app.root.findByName('light');
+            if (lightEntity instanceof PlayEntity) {
+                const lightComponent = lightEntity.findComponent('light') as LightComponent | null;
+                if (lightComponent !== null && lightComponent !== undefined) {
+                    lightComponent.intensity = options.tint.lightIntensity;
+                }
+            }
+        }
         this.health = PLAYER_MAX_HEALTH;
         this.verticalVelocity = 0;
         this.grounded = true;
@@ -805,6 +964,19 @@ export class PlayerSystem implements GameSystem {
         if (this.camera !== null) {
             this.camera.setPosition(0, 2, 6);
             this.camera.lookAt(0, 1, 0);
+            const cameraComponent = this.camera.findComponent('camera');
+            if (cameraComponent !== null && cameraComponent !== undefined) {
+                cameraComponent.clearColor.set(0.043, 0.086, 0.149);
+            }
+        }
+        if (this.app !== null) {
+            const lightEntity = this.app.root.findByName('light');
+            if (lightEntity instanceof PlayEntity) {
+                const lightComponent = lightEntity.findComponent('light') as LightComponent | null;
+                if (lightComponent !== null && lightComponent !== undefined) {
+                    lightComponent.intensity = 1;
+                }
+            }
         }
         this.camera = null;
     }
@@ -869,6 +1041,11 @@ export class PlayerSystem implements GameSystem {
         const healthBar = document.getElementById('hud-health-bar');
         if (healthBar !== null) {
             healthBar.style.width = `${this.health}%`;
+        }
+        // Build 5 UI polish: low-health pulse, presentation only.
+        const healthBlock = document.querySelector('.hud-health');
+        if (healthBlock !== null) {
+            healthBlock.classList.toggle('low-health', this.health > 0 && this.health <= 30);
         }
         const weaponText = document.getElementById('hud-weapon-text');
         if (weaponText !== null && this.weapon !== null) {
