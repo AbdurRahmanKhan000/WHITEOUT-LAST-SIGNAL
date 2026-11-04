@@ -610,6 +610,84 @@ until the current gate passes.
   parent handles delivery. No ZIP is delivered by this build.
 - Next build recommendation: Build 8 (polish, QA and release).
 
+## Build 8 report
+
+- Scope (SRS section 11, Build 8 — final build): polish, QA and
+  release. No new gameplay, no balance changes, no level-data
+  changes, no InputAdapter changes. The only code added in this
+  build is a campaign-completeness regression test
+  (`tests/unit/build8.test.ts`), a rewritten README for the finished
+  v1.0, and this report.
+- Campaign completeness regression: the new test proves in data
+  that the catalog holds exactly 30 levels, ids 1–30 in order,
+  unique names, every level playable, the SRS stage/difficulty
+  mapping (1–3 Training/Easy, 4–8 Operations/Moderate, 9–15 Combat
+  Zone/Hard, 16–22 Special Operations/Very Hard, 23–27 Final
+  Campaign/Extreme, 28–30 Final Showdown/Elite), the nextLevelId
+  chain 1→30 with a null terminator, `validateCatalog()` passing,
+  and the ending rule: completing Level 30 moves the frontier to
+  31 (campaign complete), replaying Level 30 cannot push it
+  further, and defeat never unlocks.
+- Performance audit (measured, not invented): production build
+  JS 1,258.12 kB / 331.30 kB gzip (CSS 4.66 kB / 1.68 kB gzip) —
+  unchanged from Build 7, as expected, since no game code changed.
+  The bundle is dominated by the PlayCanvas engine itself; there
+  are no GLB models, textures, or audio assets to optimize, so no
+  GLB/texture/LOD optimization is claimed — that work does not
+  exist in this project and is not faked here. What does exist was
+  checked: the EffectPool is capped per quality preset (12/24/48),
+  quality presets change pixel ratio and shadow casting live,
+  enemies are destroyed on exit to the menu, mission state is
+  cleared on exit/mainMenu, every system unsubscribes in
+  `dispose()` (MissionSystem, EnemySystem, GraphicsSystem,
+  AudioSystem, UISystem, PlayerSystem all run their cleanups),
+  and PlayerSystem's `destroyArena` restores the environment tint.
+  No unbounded entity accumulation and no leaked listener path
+  was found; no fix was needed, so none is claimed.
+- Browser smoke scope (stated honestly): the automated suite runs
+  on Chromium via Playwright on this VM. Chrome and Edge are the
+  SRS primary browsers; the owner has already played the live
+  build on Chrome, and a final Edge/Chrome check on the owner's
+  machine is the remaining manual verification. Edge was NOT
+  tested here and is not claimed.
+- Release docs: README.md rewritten for the finished v1.0
+  campaign (how to run, how to play, controls, settings, scripts,
+  layout, deployment, and the honest limitations list). The
+  test-arena debug HUD is deliberately kept — it is the testing
+  view; the campaign HUD is already clean.
+- Known limitations carried into v1.0 (complete list, unchanged
+  from Builds 5–7 unless noted): all 30 levels reuse the test-arena
+  geometry (spawn/groups/zones/time/ammo/tint vary, no separate
+  maps); figures are greybox, no licensed GLB/textures/audio;
+  effects are pooled mesh bursts, not GPU particle textures;
+  positional pan is world-relative, not head-relative; no radar
+  (deliberately omitted, not faked); no cutscene (ending is the
+  Level 30 victory text plus the frontier-31 campaign-complete
+  state); Level 2 weapon-switching is not a tracked objective;
+  musicCue is stored but the ambient loop is still generic;
+  Level 18's NPC is an extraction marker, not companion AI;
+  Level 22's rooftops/sniper are a reach + eliminate pair, not a
+  rooftop map; defend holds are timers after activation and do
+  not re-check proximity; full Level 30 combat completion was not
+  e2e-driven (ending proven by the seeded frontier-31 banner
+  test, the Level 30 briefing/deploy test, and the unit-tested
+  chain); the parallel e2e suite fails on this VM's software
+  WebGL, so the serial run is the gate; Vercel deployment happens
+  via the owner's GitHub push, because the Muse GitHub App cannot
+  see the recreated repo — no GitHub push was attempted in this
+  build.
+- Gate results 2026-11-04: typecheck pass, lint pass, fmt pass,
+  Vitest 97/97 (91 existing + 6 Build 8 campaign-completeness),
+  production build pass (dist JS 1,258.12 kB / 331.30 kB gzip),
+  Playwright 15/15 SERIAL (boot + arena + build4 + build6 ×4 +
+  build7 ×4 + enemies + mission ×3, zero console errors, 6.4 m),
+  `vite preview` smoke check HTTP 200. Local commit only — no
+  GitHub push was attempted in this build; the owner pushes
+  manually via ZIP, as before.
+- Next: none in the SRS sequence. Build 8 is the final build;
+  anything further (real character/environment assets, separate
+  maps, radar, cutscene) is a new specification, not Build 8.
+
 ## Traceability (Build 0)
 
 | Requirement                                                                                           | Module                                                                    | Evidence                                                                                             |
